@@ -13,8 +13,20 @@ const els = {
   warnings: document.getElementById('warnings'),
   previewSection: document.getElementById('previewSection'),
   previewText: document.getElementById('previewText'),
-  previewJson: document.getElementById('previewJson'),
+  editFields: document.getElementById('editFields'),
+  btnResetDraft: document.getElementById('btnResetDraft'),
   btnSend: document.getElementById('btnSend'),
+  autoSend: document.getElementById('autoSend'),
+  autoSendChat: document.getElementById('autoSendChat'),
+  senderUsername: document.getElementById('senderUsername'),
+  linkStatus: document.getElementById('linkStatus'),
+  linkForm: document.getElementById('linkForm'),
+  btnLinkCode: document.getElementById('btnLinkCode'),
+  linkCodeWrap: document.getElementById('linkCodeWrap'),
+  linkCode: document.getElementById('linkCode'),
+  btnLinkConfirm: document.getElementById('btnLinkConfirm'),
+  btnUnlink: document.getElementById('btnUnlink'),
+  linkMessage: document.getElementById('linkMessage'),
   sendStatus: document.getElementById('sendStatus'),
   apiBaseUrl: document.getElementById('apiBaseUrl'),
   apiToken: document.getElementById('apiToken'),
@@ -24,6 +36,23 @@ const els = {
 };
 
 let currentDraft = null;
+let originalDraft = null;
+let draftEdited = false;
+let telegramLink = { linked: false, username: '', token: '' };
+
+const EDIT_FIELDS = [
+  ['transport_number', 'Номер перевозки', 'text', true],
+  ['transport_date', 'Дата', 'text', true],
+  ['closing_time', 'Время', 'text', true],
+  ['accepted_total', 'Принято', 'number', false],
+  ['tya', 'ТЯ', 'number', false],
+  ['ktya', 'КТЯ', 'number', false],
+  ['shortage', 'Недостачи', 'number', false],
+  ['excess', 'Излишки', 'number', false],
+  ['zasyl', 'Засылы', 'number', false],
+  ['issued', 'Выдано', 'number', false],
+  ['leftover', 'Остатки', 'number', false],
+];
 
 function setStatus(text, kind = '') {
   els.status.textContent = text;
@@ -46,17 +75,11 @@ function formatReportText(draft) {
     '',
     `Принято всего: ${dash(c.accepted_total)} ед.`,
     '',
-    `ТЯ: ${dash(c.tya)}`,
-    '',
-    `КТЯ: ${dash(c.ktya)}`,
-    '',
-    `Недостачи: ${dash(c.shortage)}`,
-    '',
-    `Излишки: ${dash(c.excess)}`,
-    '',
-    `Засылы: ${dash(c.zasyl)}`,
-    '',
-    `Недовоз: ${c.nedovoz == null ? '(вручную в боте)' : c.nedovoz}`,
+    `1) ТЯ: ${dash(c.tya)}`,
+    `2) КТЯ: ${dash(c.ktya)}`,
+    `3) Недостачи: ${dash(c.shortage)}`,
+    `4) Излишки: ${dash(c.excess)}`,
+    `5) Засылы: ${dash(c.zasyl)}`,
     '',
     `Выдано: ${dash(c.issued)} ед.`,
     '',
@@ -64,6 +87,49 @@ function formatReportText(draft) {
     '',
     'ПП - закрыто.',
   ].join('\n');
+}
+
+function isLinked() {
+  return Boolean(
+    telegramLink.linked &&
+      telegramLink.token &&
+      /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(telegramLink.username)
+  );
+}
+
+function chatSignature() {
+  if (!isLinked()) return '';
+  return `\nОтчет от: @${telegramLink.username}\nС помощью @plus7helper_bot`;
+}
+
+function syncChatAccess() {
+  const linked = isLinked();
+  els.autoSendChat.disabled = !linked;
+  if (!linked && els.autoSendChat.checked) {
+    els.autoSendChat.checked = false;
+    chrome.storage.sync.set({ autoSendChat: false });
+  }
+  syncSendButton();
+}
+
+function renderLink() {
+  const linked = telegramLink.linked && telegramLink.username;
+  els.linkForm.hidden = Boolean(linked);
+  els.btnUnlink.hidden = !linked;
+  els.linkStatus.textContent = linked
+    ? `Привязан: @${telegramLink.username}`
+    : 'Сначала привяжите Telegram — без этого отправка в чат выключена.';
+  els.linkStatus.className = linked ? 'status ok' : 'hint';
+  syncChatAccess();
+}
+
+async function saveLink() {
+  await chrome.storage.sync.set({
+    telegramLinked: telegramLink.linked,
+    senderUsername: telegramLink.username,
+    telegramLinkToken: telegramLink.token,
+  });
+  renderLink();
 }
 
 function renderChecklist(draft) {
@@ -126,23 +192,111 @@ function renderChoices(draft) {
         return;
       }
       showDraft(res.result);
+      if (els.autoSendChat.checked || els.autoSend.checked) {
+        await sendDraft();
+        return;
+      }
       setStatus('Перевозка выбрана', 'ok');
     });
     els.carriageChoices.appendChild(btn);
   });
 }
 
+function refreshPreview() {
+  if (!currentDraft) return;
+  els.previewText.textContent = formatReportText(currentDraft) + chatSignature();
+}
+
+function renderEditFields(draft) {
+  const closing = draft.closing || {};
+  els.editFields.innerHTML = '';
+  for (const [key, label, kind, wide] of EDIT_FIELDS) {
+    const wrap = document.createElement('label');
+    wrap.className = wide ? 'edit-field wide' : 'edit-field';
+    const title = document.createElement('span');
+    title.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.dataset.field = key;
+    input.dataset.kind = kind;
+    input.autocomplete = 'off';
+    if (kind === 'number') input.inputMode = 'numeric';
+    const value = closing[key];
+    input.value = value == null ? '' : String(value);
+    wrap.append(title, input);
+    els.editFields.appendChild(wrap);
+  }
+}
+
+function markChecklist(key) {
+  const checklist = currentDraft?.meta?.checklist;
+  if (!checklist) return;
+  const closing = currentDraft.closing || {};
+  if (key === 'tya' || key === 'ktya') {
+    checklist.tare = closing.tya != null && closing.ktya != null;
+  } else if (key === 'issued' || key === 'leftover' || key === 'zasyl') {
+    checklist[key] = closing[key] != null;
+  } else if (key === 'transport_number') {
+    checklist.carriage = Boolean(closing.transport_number);
+  }
+}
+
+function cloneDraft(draft) {
+  return JSON.parse(JSON.stringify(draft));
+}
+
+function resetDraft() {
+  if (!originalDraft) return;
+  const keepSend = !els.btnSend.hidden && els.autoSendChat.checked;
+  currentDraft = cloneDraft(originalDraft);
+  draftEdited = keepSend;
+  els.btnResetDraft.disabled = true;
+  renderChecklist(currentDraft);
+  renderEditFields(currentDraft);
+  refreshPreview();
+  syncSendButton();
+  chrome.storage.session.set({ lastDraft: currentDraft });
+  els.sendStatus.textContent = 'Черновик возвращён к собранным данным.';
+  els.sendStatus.className = 'status ok';
+}
+
+function applyFieldEdit(input) {
+  if (!currentDraft) return;
+  const key = input.dataset.field;
+  const raw = input.value.trim();
+  currentDraft.closing = currentDraft.closing || {};
+  if (input.dataset.kind === 'number') {
+    if (raw === '') currentDraft.closing[key] = null;
+    else if (!/^\d+$/.test(raw)) return;
+    else currentDraft.closing[key] = Number(raw);
+  } else {
+    const text = key === 'transport_number' ? raw.replace(/^#/, '') : raw;
+    currentDraft.closing[key] = text === '' ? null : text;
+  }
+  draftEdited = true;
+  els.btnResetDraft.disabled = false;
+  markChecklist(key);
+  renderChecklist(currentDraft);
+  refreshPreview();
+  syncSendButton();
+  chrome.storage.session.set({ lastDraft: currentDraft });
+}
+
 function showDraft(draft) {
+  originalDraft = cloneDraft(draft);
   currentDraft = draft;
+  draftEdited = false;
+  els.btnResetDraft.disabled = true;
   els.pointBadge.textContent = `ПП: ${draft.point_number}`;
   els.pointBadge.className = 'badge ok';
   renderChecklist(draft);
   renderChoices(draft);
-  els.previewText.textContent = formatReportText(draft);
-  els.previewJson.textContent = JSON.stringify(draft, null, 2);
+  renderEditFields(draft);
+  refreshPreview();
   els.previewSection.hidden = false;
   els.btnSend.disabled = false;
   els.sendStatus.textContent = '';
+  syncSendButton();
 }
 
 async function refreshPoint() {
@@ -199,6 +353,14 @@ async function collect() {
     }
     showDraft(res.result);
     const warnCount = res.result.meta?.warnings?.length || 0;
+    if (els.autoSendChat.checked || els.autoSend.checked) {
+      const sent = await sendDraft();
+      if (sent && warnCount) {
+        const where = els.autoSendChat.checked ? 'Отчёт отправлен в чат' : 'Черновик отправлен';
+        setStatus(`${where}. Предупреждений: ${warnCount}. Проверьте чеклист.`, '');
+      }
+      return;
+    }
     setStatus(
       warnCount
         ? `Собрано с предупреждениями (${warnCount}). Проверьте чеклист.`
@@ -213,21 +375,64 @@ async function collect() {
   }
 }
 
-async function sendDraft() {
-  if (!currentDraft) return;
+function missingDraftFields(draft) {
+  const closing = draft?.closing || {};
+  const labels = [
+    ['transport_number', 'номер перевозки'],
+    ['transport_date', 'дата перевозки'],
+    ['closing_time', 'время закрытия'],
+    ['accepted_total', 'принято'],
+    ['tya', 'ТЯ'],
+    ['ktya', 'КТЯ'],
+    ['shortage', 'недостачи'],
+    ['excess', 'излишки'],
+    ['zasyl', 'засылы'],
+    ['issued', 'выдано'],
+    ['leftover', 'остатки'],
+  ];
+  return labels
+    .filter(([key]) => closing[key] == null || closing[key] === '')
+    .map(([, label]) => label);
+}
+
+async function sendDraft(forceChat = false) {
+  if (!currentDraft) return false;
+  const gaps = missingDraftFields(currentDraft);
+  if (gaps.length) {
+    els.sendStatus.textContent = `Пока нельзя отправить. Не хватает: ${gaps.join(', ')}. Если перевозок несколько — выберите одну.`;
+    els.sendStatus.className = 'status error';
+    return false;
+  }
+  const publish = forceChat === true || els.autoSendChat.checked;
+  if (publish && !isLinked()) {
+    els.sendStatus.textContent = 'Сначала привяжите Telegram. Без этого отчёт в чат не уйдёт.';
+    els.sendStatus.className = 'status error';
+    return false;
+  }
   els.btnSend.disabled = true;
-  els.sendStatus.textContent = 'Отправка…';
+  els.sendStatus.textContent = publish ? 'Отправляю в чат…' : 'Отправка…';
   els.sendStatus.className = 'status';
-  const res = await bg('SEND_DRAFT', { draft: currentDraft });
+  const res = await bg('SEND_DRAFT', {
+    draft: currentDraft,
+    publish,
+    linkToken: publish ? telegramLink.token : '',
+  });
   if (!res?.ok) {
     els.sendStatus.textContent = res?.error || 'Ошибка API';
     els.sendStatus.className = 'status error';
     els.btnSend.disabled = false;
-    return;
+    return false;
   }
-  els.sendStatus.textContent = `Сохранено на API для ПП ${currentDraft.point_number}. В чат ещё не ушло — только черновик.`;
+  els.sendStatus.textContent = publish
+    ? `Отчёт ушёл в чат ПП ${currentDraft.point_number} от @${telegramLink.username}.`
+    : `Сохранено на API для ПП ${currentDraft.point_number}. В чат ещё не ушло — только черновик.`;
   els.sendStatus.className = 'status ok';
   els.btnSend.disabled = false;
+  if (publish) {
+    draftEdited = false;
+    syncSendButton();
+  }
+  return true;
 }
 
 async function loadSettings() {
@@ -235,6 +440,24 @@ async function loadSettings() {
   els.apiBaseUrl.value = cfg.apiBaseUrl;
   els.apiToken.value = cfg.apiToken;
   els.pageSettleMs.value = cfg.pageSettleMs;
+  els.autoSend.checked = Boolean(cfg.autoSend);
+  els.autoSendChat.checked = Boolean(cfg.autoSendChat);
+  telegramLink = {
+    linked: Boolean(cfg.telegramLinked && cfg.telegramLinkToken && cfg.senderUsername),
+    username: cfg.senderUsername || '',
+    token: cfg.telegramLinkToken || '',
+  };
+  els.senderUsername.value = telegramLink.linked ? telegramLink.username : cfg.senderUsername || '';
+  syncSendButton();
+  renderLink();
+}
+
+function syncSendButton() {
+  const manual = !els.autoSendChat.checked || draftEdited;
+  els.btnSend.hidden = !manual;
+  els.btnSend.textContent = 'Отправить в чат';
+  if (els.btnSend.parentElement) els.btnSend.parentElement.hidden = !manual;
+  refreshPreview();
 }
 
 async function saveSettings() {
@@ -242,6 +465,11 @@ async function saveSettings() {
     apiBaseUrl: els.apiBaseUrl.value.trim() || DEFAULT_CONFIG.apiBaseUrl,
     apiToken: els.apiToken.value.trim() || DEFAULT_CONFIG.apiToken,
     pageSettleMs: Number(els.pageSettleMs.value) || DEFAULT_CONFIG.pageSettleMs,
+    autoSend: els.autoSend.checked,
+    autoSendChat: els.autoSendChat.checked,
+    senderUsername: telegramLink.username,
+    telegramLinked: telegramLink.linked,
+    telegramLinkToken: telegramLink.token,
   });
   els.settingsStatus.textContent = 'Сохранено';
   els.settingsStatus.className = 'status ok';
@@ -249,7 +477,81 @@ async function saveSettings() {
 
 els.btnRefreshPoint.addEventListener('click', refreshPoint);
 els.btnCollect.addEventListener('click', collect);
-els.btnSend.addEventListener('click', sendDraft);
+els.btnSend.addEventListener('click', () => sendDraft(true));
+els.editFields.addEventListener('input', (event) => {
+  if (event.target instanceof HTMLInputElement) applyFieldEdit(event.target);
+});
+els.btnResetDraft.addEventListener('click', resetDraft);
 els.btnSaveSettings.addEventListener('click', saveSettings);
+els.autoSend.addEventListener('change', () => {
+  chrome.storage.sync.set({ autoSend: els.autoSend.checked });
+});
+els.autoSendChat.addEventListener('change', () => {
+  if (els.autoSendChat.checked && !isLinked()) {
+    els.autoSendChat.checked = false;
+    setLinkMessage('Сначала привяжите Telegram. Без этого отчёт в чат не уйдёт.', 'error');
+    return;
+  }
+  chrome.storage.sync.set({ autoSendChat: els.autoSendChat.checked });
+  syncSendButton();
+});
+function typedUsername() {
+  return els.senderUsername.value.trim().replace(/^@/, '');
+}
+
+function setLinkMessage(text, kind = '') {
+  els.linkMessage.textContent = text;
+  els.linkMessage.className = `status ${kind}`.trim();
+}
+
+els.btnLinkCode.addEventListener('click', async () => {
+  const username = typedUsername();
+  els.senderUsername.value = username;
+  els.btnLinkCode.disabled = true;
+  setLinkMessage('Отправляю код в бота…');
+  const res = await bg('LINK_CODE', { username });
+  els.btnLinkCode.disabled = false;
+  if (!res?.ok) {
+    setLinkMessage(res?.error || 'Не удалось отправить код', 'error');
+    return;
+  }
+  els.linkCodeWrap.hidden = false;
+  els.btnLinkConfirm.hidden = false;
+  els.linkCode.focus();
+  setLinkMessage('Код отправлен в личку бота. Введите 5 цифр.', 'ok');
+});
+
+els.btnLinkConfirm.addEventListener('click', async () => {
+  const username = typedUsername();
+  const code = els.linkCode.value.trim();
+  els.btnLinkConfirm.disabled = true;
+  setLinkMessage('Проверяю код…');
+  const res = await bg('LINK_CONFIRM', { username, code });
+  els.btnLinkConfirm.disabled = false;
+  if (!res?.ok) {
+    setLinkMessage(res?.error || 'Не удалось привязать', 'error');
+    return;
+  }
+  telegramLink = {
+    linked: true,
+    username: res.result.username,
+    token: res.result.link_token,
+  };
+  els.linkCode.value = '';
+  await saveLink();
+  syncSendButton();
+  setLinkMessage(`Аккаунт @${telegramLink.username} привязан.`, 'ok');
+});
+
+els.btnUnlink.addEventListener('click', async () => {
+  telegramLink = { linked: false, username: '', token: '' };
+  els.senderUsername.value = '';
+  els.linkCode.value = '';
+  els.linkCodeWrap.hidden = true;
+  els.btnLinkConfirm.hidden = true;
+  await saveLink();
+  syncSendButton();
+  setLinkMessage('Telegram отвязан.');
+});
 
 loadSettings().then(refreshPoint);

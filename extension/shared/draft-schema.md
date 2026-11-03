@@ -15,7 +15,6 @@
     "shortage": 1,
     "excess": 3,
     "zasyl": 3,
-    "nedovoz": null,
     "issued": 721,
     "leftover": 1527
   },
@@ -39,17 +38,11 @@
 
 Принято всего: {accepted_total} ед.
 
-ТЯ: {tya}
-
-КТЯ: {ktya}
-
-Недостачи: {shortage}
-
-Излишки: {excess}
-
-Засылы: {zasyl}
-
-Недовоз: {nedovoz}   ← только руками (из расширения null)
+1) ТЯ: {tya}
+2) КТЯ: {ktya}
+3) Недостачи: {shortage}
+4) Излишки: {excess}
+5) Засылы: {zasyl}
 
 Выдано: {issued} ед.
 

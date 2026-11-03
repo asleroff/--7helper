@@ -4,22 +4,22 @@
 
 1. `chrome://extensions` → режим разработчика
 2. **Загрузить распакованное** → папка `extension`
-3. Клик по иконке открывает боковую панель
-4. В настройках панели: URL API (`http://127.0.0.1:8787`) и токен как в `api/.env`
+3. Клик по иконке открывает окно поверх сайта
+4. В настройках окна: URL API (`http://127.0.0.1:8787`) и токен как в `api/.env`
 
 ## Как работает сбор
 
 Service worker последовательно открывает на активной вкладке Турбо ПВЗ:
 
 1. `/reports/giveout?filter=…сегодня…` → кнопка **Найти** → «Найдено» = выдано
-2. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_POSTING"]}` → Тип=Отправления → **Найти** → остатки
-3. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE"]}` → Тип=Тарный ящик → **Найти** → тара; КТЯ=строки с «КТЯ»; ТЯ=Найдено−КТЯ
-4. Приёмка → завершённые `/carriages_list/finished` → поля перевозки
+2. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_POSTING"]}` → Тип=Отправления → **Найти** → «Найдено» = остатки
+3. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE"]}` → Тип=Тарный ящик → **Найти** → тара по всем страницам; КТЯ=строки с «КТЯ»; ТЯ=Найдено−КТЯ
+4. Приёмка → завершённые `/carriages_list/finished` → дата сегодня → одна перевозка подставляется сама, несколько нужно выбрать
 5. `/carriages_list/finished-carriage-detail/{id}` → Статус=«Засыл» → «Найдено» / строки
 
 ПП читается из шапки (`ПП_1125`). Если не найден — сбор не стартует.
 
-Селекторы: `content/selectors.js`.
+Скрипты страницы, по порядку: `selectors.js`, `dom.js`, `counts.js`, `report-page.js`, `tare.js`, `carriages.js`, `zasyl.js`, `messages.js`.
 
 ## Тест
 

@@ -1,16 +1,17 @@
 :root {
-  --bg: #f3f1ec;
-  --ink: #1a1f24;
-  --muted: #5c6670;
-  --line: #d5d0c8;
-  --accent: #0b6e4f;
+  --bg: #f2f5f9;
+  --ink: #001a34;
+  --muted: #5b6b7c;
+  --line: #d2dbe3;
+  --accent: #005bff;
   --accent-ink: #fff;
-  --warn: #8a4b08;
-  --warn-bg: #fff3e0;
-  --bad: #8b1e1e;
-  --ok: #0b6e4f;
-  --card: #fffcf7;
-  --font: "Segoe UI", "PT Root UI", system-ui, sans-serif;
+  --accent-soft: #e8f0ff;
+  --warn: #8a5a00;
+  --warn-bg: #fff6e5;
+  --bad: #d32f2f;
+  --ok: #005bff;
+  --card: #fff;
+  --font: "Segoe UI", "Onest", "PT Root UI", system-ui, sans-serif;
   --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 }
 
@@ -23,9 +24,7 @@ body {
   padding: 12px;
   font: 14px/1.45 var(--font);
   color: var(--ink);
-  background:
-    radial-gradient(1200px 400px at 0% -10%, #e7efe9 0%, transparent 55%),
-    linear-gradient(180deg, #efece5, var(--bg));
+  background: var(--bg);
   min-height: 100vh;
 }
 
@@ -34,25 +33,31 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin: -12px -12px 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
 }
 
 .brand {
   font-weight: 700;
+  color: var(--accent);
   letter-spacing: 0.01em;
 }
 
 .badge {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--card);
+  background: #fff;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .badge.ok {
-  border-color: #9bc9b5;
-  color: var(--ok);
+  border-color: #b9d0ff;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .badge.muted {
@@ -65,14 +70,14 @@ body {
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 10px;
+  box-shadow: 0 1px 2px rgba(0, 26, 52, 0.04);
 }
 
 .card h2 {
   margin: 0 0 8px;
   font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  letter-spacing: 0.02em;
+  color: var(--ink);
   font-weight: 700;
 }
 
@@ -92,6 +97,10 @@ button {
   color: var(--ink);
 }
 
+button:hover:not(:disabled) {
+  border-color: #9db7e8;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -104,8 +113,15 @@ button.primary {
   font-weight: 600;
 }
 
+button.primary:hover:not(:disabled) {
+  background: #004ce6;
+  border-color: #004ce6;
+}
+
 button.ghost {
-  background: transparent;
+  background: #fff;
+  color: var(--accent);
+  border-color: #b9d0ff;
 }
 
 button.choice {
@@ -116,6 +132,7 @@ button.choice {
 
 button.choice.active {
   border-color: var(--accent);
+  background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
@@ -130,13 +147,13 @@ button.choice.active {
 }
 
 .status.ok {
-  color: var(--ok);
+  color: var(--accent);
 }
 
 .hint {
-  margin: 0 0 8px;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 label {
@@ -146,7 +163,32 @@ label {
   color: var(--muted);
 }
 
-input {
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.switch input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.switch:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input[type="url"],
+input[type="password"],
+input[type="text"],
+input[type="number"] {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -158,6 +200,11 @@ input {
   background: #fff;
 }
 
+input:focus {
+  outline: 2px solid #b9d0ff;
+  border-color: var(--accent);
+}
+
 .checklist,
 .warnings {
   margin: 0;
@@ -166,7 +213,7 @@ input {
 
 .checklist li.ok::marker {
   content: "✓ ";
-  color: var(--ok);
+  color: var(--accent);
 }
 
 .checklist li.bad::marker {
@@ -186,26 +233,45 @@ input {
   display: none;
 }
 
-.preview {
+.edit-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.edit-field {
   margin: 0;
-  padding: 10px;
-  background: #1a1f24;
-  color: #e8eee9;
+}
+
+.edit-field.wide {
+  grid-column: 1 / -1;
+}
+
+.edit-field input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
   border-radius: 8px;
-  font: 12px/1.5 var(--mono);
+  border: 1px solid var(--line);
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+.preview {
+  margin: 0 0 10px;
+  padding: 12px;
+  background: #f7f9fc;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 13px/1.5 var(--font);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 280px;
   overflow: auto;
-}
-
-.preview.json {
-  max-height: 200px;
-  margin-top: 8px;
-}
-
-details {
-  margin: 8px 0;
 }
 
 .progress {

@@ -4,10 +4,24 @@ export const DEFAULT_CONFIG = {
   apiToken: 'dev-extension-token-change-me',
   pageSettleMs: 2500,
   pageTimeoutMs: 45000,
+  autoSend: false,
+  autoSendChat: false,
+  senderUsername: '',
+  telegramLinked: false,
+  telegramLinkToken: '',
 };
 
 export async function loadConfig() {
-  const stored = await chrome.storage.sync.get(['apiBaseUrl', 'apiToken', 'pageSettleMs']);
+  const stored = await chrome.storage.sync.get([
+    'apiBaseUrl',
+    'apiToken',
+    'pageSettleMs',
+    'autoSend',
+    'autoSendChat',
+    'senderUsername',
+    'telegramLinked',
+    'telegramLinkToken',
+  ]);
   return {
     ...DEFAULT_CONFIG,
     ...Object.fromEntries(

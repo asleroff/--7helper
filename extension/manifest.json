@@ -2,24 +2,22 @@
   "manifest_version": 3,
   "name": "Турбо ПВЗ → Закрытие",
   "description": "Сбор черновика закрытия смены с Турбо ПВЗ для Telegram-бота ПВЗ",
-  "version": "0.2.4",
+  "version": "0.2.22",
   "permissions": [
-    "sidePanel",
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "alwaysOnTopWindows"
   ],
   "host_permissions": [
     "https://turbo-pvz.ozon.ru/*",
     "http://127.0.0.1:8787/*",
-    "http://localhost:8787/*"
+    "http://localhost:8787/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
-  },
-  "side_panel": {
-    "default_path": "sidepanel/index.html"
   },
   "action": {
     "default_title": "Турбо ПВЗ Закрытие",
@@ -39,7 +37,16 @@
   "content_scripts": [
     {
       "matches": ["https://turbo-pvz.ozon.ru/*"],
-      "js": ["content/selectors.js", "content/content.js"],
+      "js": [
+        "content/selectors.js",
+        "content/dom.js",
+        "content/counts.js",
+        "content/report-page.js",
+        "content/tare.js",
+        "content/carriages.js",
+        "content/zasyl.js",
+        "content/messages.js"
+      ],
       "run_at": "document_idle"
     }
   ]

@@ -17,6 +17,39 @@
         <button id="btnRefreshPoint" type="button" class="ghost">Обновить ПП</button>
         <button id="btnCollect" type="button" class="primary">Собрать закрытие</button>
       </div>
+      <label class="switch">
+        <input id="autoSend" type="checkbox" />
+        <span>Сразу отправлять черновик боту</span>
+      </label>
+      <label class="switch">
+        <input id="autoSendChat" type="checkbox" />
+        <span>Сразу отправлять в чат пункта</span>
+      </label>
+      <p class="hint">В чат пункта отчёт уходит только с привязанным Telegram, чтобы было видно, кто отправил. Пункт должен быть привязан через /add_point.</p>
+      <div id="linkBox">
+        <p id="linkStatus" class="hint">Сначала привяжите Telegram — без этого отправка в чат выключена.</p>
+        <div id="linkForm">
+          <label>
+            Telegram username
+            <input id="senderUsername" type="text" placeholder="petyunyka" autocomplete="off" />
+            <span class="hint">Без @. Сначала напишите боту /start.</span>
+          </label>
+          <div class="row">
+            <button id="btnLinkCode" type="button" class="ghost">Отправить код</button>
+          </div>
+          <label id="linkCodeWrap" hidden>
+            Код из бота
+            <input id="linkCode" type="text" inputmode="numeric" maxlength="5" placeholder="12345" autocomplete="off" />
+          </label>
+          <div class="row">
+            <button id="btnLinkConfirm" type="button" class="primary" hidden>Привязать</button>
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnUnlink" type="button" class="ghost" hidden>Отвязать</button>
+        </div>
+        <p id="linkMessage" class="status"></p>
+      </div>
       <p id="status" class="status">Откройте turbo-pvz.ozon.ru и нажмите «Собрать закрытие».</p>
       <div id="progress" class="progress hidden"></div>
     </section>
@@ -36,12 +69,13 @@
     <section class="card" id="previewSection" hidden>
       <h2>Превью черновика</h2>
       <pre id="previewText" class="preview"></pre>
-      <details>
-        <summary>JSON</summary>
-        <pre id="previewJson" class="preview json"></pre>
-      </details>
+      <h2>Поправить</h2>
+      <div id="editFields" class="edit-fields"></div>
       <div class="row">
-        <button id="btnSend" type="button" class="primary" disabled>Отправить боту</button>
+        <button id="btnResetDraft" type="button" class="ghost" disabled>Сбросить</button>
+      </div>
+      <div class="row">
+        <button id="btnSend" type="button" class="primary" disabled>Отправить в чат</button>
       </div>
       <p id="sendStatus" class="status"></p>
     </section>
@@ -51,6 +85,7 @@
       <label>
         Base URL
         <input id="apiBaseUrl" type="url" placeholder="http://127.0.0.1:8787" />
+        <span class="hint">На этом компьютере оставьте 127.0.0.1. На других пунктах вставьте адрес, который API печатает как «Другие ПК».</span>
       </label>
       <label>
         Extension token

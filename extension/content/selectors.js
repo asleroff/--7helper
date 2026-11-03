@@ -20,7 +20,7 @@ window.TurboPvzSelectors = {
   /** Кнопка запуска отчёта / поиска (синяя «Найти» / текст «Применить» в подсказке) */
   findButtonTexts: ['Найти', 'Применить', 'Показать'],
 
-  /** Фильтр типа на остатках */
+  /** Остаток: тип «Отправления». Тара: тип «Тарный ящик». Оба фильтра в адресе страницы. */
   remainsPostingFilter: 'GRPC_REMNANT_FILTER_ARTICLE_POSTING',
   remainsTareFilter: 'GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE',
 
