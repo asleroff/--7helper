@@ -518,6 +518,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         return sendDraftToApi(draft, extra);
       }
+      case 'SEND_MACHINE':
+        return postApi('/api/machine', {
+          point_number: message.pointNumber,
+          time: message.time,
+          link_token: message.linkToken,
+        });
       case 'LINK_CODE':
         return postApi('/api/link/request', { username: message.username });
       case 'LINK_CONFIRM':

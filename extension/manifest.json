@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Турбо ПВЗ → Закрытие",
   "description": "Сбор черновика закрытия смены с Турбо ПВЗ для Telegram-бота ПВЗ",
-  "version": "0.2.22",
+  "version": "0.2.25",
   "permissions": [
     "storage",
     "tabs",

@@ -200,22 +200,23 @@ def point_chat_id(point: str) -> int:
         ).fetchone()
     if not row or row[0] is None:
         raise PublishError(
-            f"ПП {point} не привязан к чату. В боте выполните /add_point.",
+            f"ПП {point} не привязан к чату. В боте выполните /add_chat_to_pp.",
             409,
         )
     return int(row[0])
 
 
-def remember_report(point: str, text: str, closing: dict) -> None:
+def remember_report(point: str, text: str, closing: dict, report_type: str = "closing") -> None:
     if not BOT_DB.exists():
         return
     with sqlite3.connect(BOT_DB) as con:
         con.execute(
             """INSERT INTO reports
                (point_number, report_type, user_id, data, accepted, issued, leftover, created_at)
-               VALUES (?, 'closing', 0, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, 0, ?, ?, ?, ?, ?)""",
             (
                 point,
+                report_type,
                 text,
                 closing.get("accepted_total"),
                 closing.get("issued"),
@@ -377,6 +378,35 @@ def publish_report(point: str, draft: dict, link_token: str) -> str:
     return text
 
 
+def publish_machine(point: str, when: str, link_token: str) -> str:
+    sender = username_from_link(link_token)
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", sender):
+        raise PublishError("Отправка доступна только после привязки Telegram в расширении.", 403)
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", when):
+        raise PublishError("Время нужно в виде ЧЧ:ММ, например 14:30.", 400)
+    text = (
+        f"ПП_{point}\n"
+        "Приехала машина\n"
+        f"Время: {when}\n"
+        f"Отчет от: @{sender}\n"
+        f"С помощью @{bot_username()}"
+    )
+    telegram_call(
+        "sendMessage",
+        {
+            "chat_id": point_chat_id(point),
+            "text": html.escape(text),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        },
+    )
+    try:
+        remember_report(point, text, {}, "machine")
+    except sqlite3.Error as exc:
+        print(f"report save failed: {exc}")
+    return text
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "TurboDraftAPI/0.1"
 
@@ -471,7 +501,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = unquote(self.path.split("?", 1)[0])
-        if path not in {"/api/drafts", "/api/link/request", "/api/link/confirm"}:
+        if path not in {"/api/drafts", "/api/link/request", "/api/link/confirm", "/api/machine"}:
             self._json(404, {"error": "not found"})
             return
         if not self._auth():
@@ -497,6 +527,22 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(exc.status, {"error": str(exc)})
                 return
             self._json(200, {"ok": True, **linked})
+            return
+        if path == "/api/machine":
+            point = re.sub(r"\D", "", str(payload.get("point_number") or ""))
+            if not re.fullmatch(r"\d{3,6}", point):
+                self._json(400, {"error": "Нужен номер ПП из шапки Турбо."})
+                return
+            try:
+                text = publish_machine(
+                    point,
+                    str(payload.get("time") or "").strip(),
+                    str(payload.get("link_token") or ""),
+                )
+            except PublishError as exc:
+                self._json(exc.status, {"error": str(exc)})
+                return
+            self._json(200, {"ok": True, "point_number": point, "text": text})
             return
 
         draft = payload

@@ -12,22 +12,19 @@
       <div id="pointBadge" class="badge muted">ПП: —</div>
     </header>
 
+    <nav class="tabs">
+      <button id="tabHome" type="button" class="tab active">Главная</button>
+      <button id="tabGiveout" type="button" class="tab">Выдача</button>
+      <button id="tabReports" type="button" class="tab">Отчёты</button>
+    </nav>
+
+    <div id="panelHome">
     <section class="card">
       <div class="row">
         <button id="btnRefreshPoint" type="button" class="ghost">Обновить ПП</button>
-        <button id="btnCollect" type="button" class="primary">Собрать закрытие</button>
       </div>
-      <label class="switch">
-        <input id="autoSend" type="checkbox" />
-        <span>Сразу отправлять черновик боту</span>
-      </label>
-      <label class="switch">
-        <input id="autoSendChat" type="checkbox" />
-        <span>Сразу отправлять в чат пункта</span>
-      </label>
-      <p class="hint">В чат пункта отчёт уходит только с привязанным Telegram, чтобы было видно, кто отправил. Пункт должен быть привязан через /add_point.</p>
       <div id="linkBox">
-        <p id="linkStatus" class="hint">Сначала привяжите Telegram — без этого отправка в чат выключена.</p>
+        <p id="linkStatus" class="hint">Сначала привяжите Telegram — без этого расширение не работает.</p>
         <div id="linkForm">
           <label>
             Telegram username
@@ -50,34 +47,6 @@
         </div>
         <p id="linkMessage" class="status"></p>
       </div>
-      <p id="status" class="status">Откройте turbo-pvz.ozon.ru и нажмите «Собрать закрытие».</p>
-      <div id="progress" class="progress hidden"></div>
-    </section>
-
-    <section class="card" id="choiceSection" hidden>
-      <h2>Перевозки за сегодня</h2>
-      <p class="hint">Найдено больше одной — выберите нужную.</p>
-      <div id="carriageChoices" class="choices"></div>
-    </section>
-
-    <section class="card" id="checklistSection" hidden>
-      <h2>Чеклист</h2>
-      <ul id="checklist" class="checklist"></ul>
-      <ul id="warnings" class="warnings"></ul>
-    </section>
-
-    <section class="card" id="previewSection" hidden>
-      <h2>Превью черновика</h2>
-      <pre id="previewText" class="preview"></pre>
-      <h2>Поправить</h2>
-      <div id="editFields" class="edit-fields"></div>
-      <div class="row">
-        <button id="btnResetDraft" type="button" class="ghost" disabled>Сбросить</button>
-      </div>
-      <div class="row">
-        <button id="btnSend" type="button" class="primary" disabled>Отправить в чат</button>
-      </div>
-      <p id="sendStatus" class="status"></p>
     </section>
 
     <section class="card">
@@ -98,6 +67,94 @@
       <button id="btnSaveSettings" type="button" class="ghost">Сохранить</button>
       <p id="settingsStatus" class="status"></p>
     </section>
+    </div>
+
+    <div id="panelGiveout" hidden>
+    <section class="card">
+      <p class="hint">Пока пусто.</p>
+    </section>
+    </div>
+
+    <div id="panelReports" hidden>
+    <section class="card">
+      <div class="row">
+        <button id="btnCollect" type="button" class="primary">Собрать закрытие</button>
+      </div>
+      <label class="switch">
+        <input id="autoSend" type="checkbox" />
+        <span>Сразу отправлять черновик боту</span>
+      </label>
+      <label class="switch">
+        <input id="autoSendChat" type="checkbox" />
+        <span>Сразу отправлять в чат пункта</span>
+      </label>
+      <p class="hint">Без привязанного Telegram сбор и отправка не работают. Чат пункта должен быть привязан через /add_chat_to_pp.</p>
+      <p id="status" class="status">Откройте turbo-pvz.ozon.ru и нажмите «Собрать закрытие».</p>
+      <div id="progress" class="progress hidden"></div>
+    </section>
+
+    <section class="card" id="choiceSection" hidden>
+      <h2>Перевозки за сегодня</h2>
+      <p class="hint">Найдено больше одной — выберите нужную.</p>
+      <div id="carriageChoices" class="choices"></div>
+    </section>
+
+    <section class="card fold" id="checklistSection">
+      <button type="button" class="fold-head" aria-expanded="false">
+        <span>Чек лист</span>
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+      <div class="fold-body">
+        <div class="fold-inner">
+          <ul id="checklist" class="checklist"></ul>
+          <ul id="warnings" class="warnings"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card fold" id="previewSection">
+      <button type="button" class="fold-head" aria-expanded="false">
+        <span>Превью черновиков</span>
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+      <div class="fold-body">
+        <div class="fold-inner">
+          <pre id="previewText" class="preview"></pre>
+          <h2>Поправить</h2>
+          <div id="editFields" class="edit-fields"></div>
+          <div class="row">
+            <button id="btnResetDraft" type="button" class="ghost" disabled>Сбросить</button>
+          </div>
+          <div class="row">
+            <button id="btnSend" type="button" class="primary" disabled>Отправить в чат</button>
+          </div>
+          <p id="sendStatus" class="status"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card fold" id="machineSection">
+      <button type="button" class="fold-head" aria-expanded="false">
+        <span>Машина</span>
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+      <div class="fold-body">
+        <div class="fold-inner">
+          <p class="hint">Сообщение уйдёт в чат текущего ПП: приехала машина и время.</p>
+          <label>
+            Время
+            <input id="machineTime" type="text" inputmode="numeric" placeholder="14:30" maxlength="5" autocomplete="off" />
+          </label>
+          <div class="row">
+            <button id="btnMachineNow" type="button" class="ghost">Сейчас</button>
+            <button id="btnMachineSend" type="button" class="primary">Отправить</button>
+          </div>
+          <pre id="machinePreview" class="preview"></pre>
+          <p id="machineStatus" class="status"></p>
+        </div>
+      </div>
+    </section>
+    </div>
 
     <script type="module" src="sidepanel.js"></script>
   </body>

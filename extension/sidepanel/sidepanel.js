@@ -4,6 +4,17 @@ const els = {
   pointBadge: document.getElementById('pointBadge'),
   btnRefreshPoint: document.getElementById('btnRefreshPoint'),
   btnCollect: document.getElementById('btnCollect'),
+  tabHome: document.getElementById('tabHome'),
+  tabGiveout: document.getElementById('tabGiveout'),
+  tabReports: document.getElementById('tabReports'),
+  panelHome: document.getElementById('panelHome'),
+  panelGiveout: document.getElementById('panelGiveout'),
+  panelReports: document.getElementById('panelReports'),
+  machineTime: document.getElementById('machineTime'),
+  btnMachineNow: document.getElementById('btnMachineNow'),
+  btnMachineSend: document.getElementById('btnMachineSend'),
+  machinePreview: document.getElementById('machinePreview'),
+  machineStatus: document.getElementById('machineStatus'),
   status: document.getElementById('status'),
   progress: document.getElementById('progress'),
   choiceSection: document.getElementById('choiceSection'),
@@ -38,6 +49,7 @@ const els = {
 let currentDraft = null;
 let originalDraft = null;
 let draftEdited = false;
+let currentPoint = '';
 let telegramLink = { linked: false, username: '', token: '' };
 
 const EDIT_FIELDS = [
@@ -104,12 +116,22 @@ function chatSignature() {
 
 function syncChatAccess() {
   const linked = isLinked();
+  els.btnCollect.disabled = !linked;
+  els.autoSend.disabled = !linked;
+  els.btnMachineSend.disabled = !linked;
+  els.btnMachineNow.disabled = !linked;
+  els.machineTime.disabled = !linked;
   els.autoSendChat.disabled = !linked;
+  if (!linked && els.autoSend.checked) {
+    els.autoSend.checked = false;
+    chrome.storage.sync.set({ autoSend: false });
+  }
   if (!linked && els.autoSendChat.checked) {
     els.autoSendChat.checked = false;
     chrome.storage.sync.set({ autoSendChat: false });
   }
   syncSendButton();
+  renderMachinePreview();
 }
 
 function renderLink() {
@@ -118,7 +140,7 @@ function renderLink() {
   els.btnUnlink.hidden = !linked;
   els.linkStatus.textContent = linked
     ? `Привязан: @${telegramLink.username}`
-    : 'Сначала привяжите Telegram — без этого отправка в чат выключена.';
+    : 'Сначала привяжите Telegram — без этого расширение не работает.';
   els.linkStatus.className = linked ? 'status ok' : 'hint';
   syncChatAccess();
 }
@@ -157,7 +179,6 @@ function renderChecklist(draft) {
     li.textContent = w;
     els.warnings.appendChild(li);
   }
-  els.checklistSection.hidden = false;
 }
 
 function renderChoices(draft) {
@@ -293,7 +314,6 @@ function showDraft(draft) {
   renderChoices(draft);
   renderEditFields(draft);
   refreshPreview();
-  els.previewSection.hidden = false;
   els.btnSend.disabled = false;
   els.sendStatus.textContent = '';
   syncSendButton();
@@ -335,10 +355,16 @@ async function refreshPoint() {
   }
   els.pointBadge.textContent = `ПП: ${point.point_number}`;
   els.pointBadge.className = 'badge ok';
+  currentPoint = String(point.point_number);
+  renderMachinePreview();
   setStatus(`Текущий пункт: ПП_${point.point_number}`);
 }
 
 async function collect() {
+  if (!isLinked()) {
+    setStatus('Сначала привяжите Telegram.', 'error');
+    return;
+  }
   els.btnCollect.disabled = true;
   els.btnSend.disabled = true;
   els.progress.classList.remove('hidden');
@@ -370,7 +396,7 @@ async function collect() {
   } catch (e) {
     setStatus(String(e?.message || e), 'error');
   } finally {
-    els.btnCollect.disabled = false;
+    els.btnCollect.disabled = !isLinked();
     els.progress.classList.add('hidden');
   }
 }
@@ -397,6 +423,11 @@ function missingDraftFields(draft) {
 
 async function sendDraft(forceChat = false) {
   if (!currentDraft) return false;
+  if (!isLinked()) {
+    els.sendStatus.textContent = 'Сначала привяжите Telegram.';
+    els.sendStatus.className = 'status error';
+    return false;
+  }
   const gaps = missingDraftFields(currentDraft);
   if (gaps.length) {
     els.sendStatus.textContent = `Пока нельзя отправить. Не хватает: ${gaps.join(', ')}. Если перевозок несколько — выберите одну.`;
@@ -483,6 +514,91 @@ els.editFields.addEventListener('input', (event) => {
 });
 els.btnResetDraft.addEventListener('click', resetDraft);
 els.btnSaveSettings.addEventListener('click', saveSettings);
+
+function showTab(name) {
+  const panels = {
+    home: els.panelHome,
+    giveout: els.panelGiveout,
+    reports: els.panelReports,
+  };
+  const tabs = {
+    home: els.tabHome,
+    giveout: els.tabGiveout,
+    reports: els.tabReports,
+  };
+  for (const key of Object.keys(panels)) {
+    panels[key].hidden = key !== name;
+    tabs[key].classList.toggle('active', key === name);
+  }
+}
+
+function machineClock() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderMachinePreview() {
+  const time = els.machineTime.value.trim() || '—'
+  const point = currentPoint || '—'
+  const sign = isLinked() ? `\nОтчет от: @${telegramLink.username}\nС помощью @plus7helper_bot` : ''
+  els.machinePreview.textContent = `ПП_${point}\nПриехала машина\nВремя: ${time}${sign}`
+}
+
+async function sendMachine() {
+  if (!isLinked()) {
+    els.machineStatus.textContent = 'Сначала привяжите Telegram.'
+    els.machineStatus.className = 'status error'
+    return
+  }
+  const time = els.machineTime.value.trim()
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    els.machineStatus.textContent = 'Время нужно в виде ЧЧ:ММ, например 14:30.'
+    els.machineStatus.className = 'status error'
+    return
+  }
+  if (!currentPoint) {
+    await refreshPoint()
+  }
+  if (!/^\d{3,6}$/.test(currentPoint)) {
+    els.machineStatus.textContent = 'Не вижу номер ПП. Откройте Турбо и нажмите «Обновить ПП».'
+    els.machineStatus.className = 'status error'
+    return
+  }
+  els.btnMachineSend.disabled = true
+  els.machineStatus.textContent = 'Отправляю…'
+  els.machineStatus.className = 'status'
+  const res = await bg('SEND_MACHINE', {
+    pointNumber: currentPoint,
+    time,
+    linkToken: telegramLink.token,
+  })
+  els.btnMachineSend.disabled = !isLinked()
+  if (!res?.ok) {
+    els.machineStatus.textContent = res?.error || 'Не удалось отправить'
+    els.machineStatus.className = 'status error'
+    return
+  }
+  els.machineStatus.textContent = `В чат ПП ${currentPoint} отправлено: машина в ${time}.`
+  els.machineStatus.className = 'status ok'
+}
+
+els.tabHome.addEventListener('click', () => showTab('home'));
+els.tabGiveout.addEventListener('click', () => showTab('giveout'));
+els.tabReports.addEventListener('click', () => showTab('reports'));
+els.btnMachineNow.addEventListener('click', () => {
+  els.machineTime.value = machineClock()
+  renderMachinePreview()
+})
+els.machineTime.addEventListener('input', renderMachinePreview)
+els.btnMachineSend.addEventListener('click', sendMachine)
+document.querySelectorAll('.fold-head').forEach((button) => {
+  button.addEventListener('click', () => {
+    const fold = button.closest('.fold');
+    const open = fold.classList.toggle('open');
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+
 els.autoSend.addEventListener('change', () => {
   chrome.storage.sync.set({ autoSend: els.autoSend.checked });
 });

@@ -73,6 +73,61 @@ body {
   box-shadow: 0 1px 2px rgba(0, 26, 52, 0.04);
 }
 
+.fold-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+
+.fold-head:hover {
+  border: 0;
+  color: var(--accent);
+}
+
+.chevron {
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.22s ease;
+  flex: 0 0 auto;
+}
+
+.fold.open .chevron {
+  transform: rotate(-135deg) translateY(-2px);
+}
+
+.fold-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+
+.fold.open .fold-body {
+  grid-template-rows: 1fr;
+}
+
+.fold-inner {
+  overflow: hidden;
+}
+
+.fold.open .fold-inner {
+  padding-top: 10px;
+}
+
 .card h2 {
   margin: 0 0 8px;
   font-size: 13px;
@@ -81,7 +136,22 @@ body {
   font-weight: 700;
 }
 
-.row {
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tab {
+  flex: 1;
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
