@@ -76,59 +76,76 @@
     </div>
 
     <div id="panelReports" hidden>
-    <section class="card">
-      <div class="row">
-        <button id="btnCollect" type="button" class="primary">Собрать закрытие</button>
-      </div>
-      <label class="switch">
-        <input id="autoSend" type="checkbox" />
-        <span>Сразу отправлять черновик боту</span>
-      </label>
-      <label class="switch">
-        <input id="autoSendChat" type="checkbox" />
-        <span>Сразу отправлять в чат пункта</span>
-      </label>
-      <p class="hint">Без привязанного Telegram сбор и отправка не работают. Чат пункта должен быть привязан через /add_chat_to_pp.</p>
-      <p id="status" class="status">Откройте turbo-pvz.ozon.ru и нажмите «Собрать закрытие».</p>
-      <div id="progress" class="progress hidden"></div>
-    </section>
-
-    <section class="card" id="choiceSection" hidden>
-      <h2>Перевозки за сегодня</h2>
-      <p class="hint">Найдено больше одной — выберите нужную.</p>
-      <div id="carriageChoices" class="choices"></div>
-    </section>
-
-    <section class="card fold" id="checklistSection">
+    <section class="card fold" id="collectSection">
       <button type="button" class="fold-head" aria-expanded="false">
-        <span>Чек лист</span>
+        <span>Собрать закрытие</span>
         <span class="chevron" aria-hidden="true"></span>
       </button>
       <div class="fold-body">
         <div class="fold-inner">
-          <ul id="checklist" class="checklist"></ul>
-          <ul id="warnings" class="warnings"></ul>
-        </div>
-      </div>
-    </section>
+          <div class="row">
+            <button id="btnCollect" type="button" class="primary">Собрать закрытие</button>
+          </div>
+          <label class="switch">
+            <input id="autoSend" type="checkbox" />
+            <span>Сразу отправлять черновик боту</span>
+          </label>
+          <label class="switch">
+            <input id="autoSendChat" type="checkbox" />
+            <span>Сразу отправлять в чат пункта</span>
+          </label>
+          <p class="hint">Без привязанного Telegram сбор и отправка не работают. Чат пункта должен быть привязан через /add_chat_to_pp.</p>
+          <p id="status" class="status">Откройте turbo-pvz.ozon.ru и нажмите «Собрать закрытие».</p>
+          <div id="progress" class="progress hidden"></div>
 
-    <section class="card fold" id="previewSection">
-      <button type="button" class="fold-head" aria-expanded="false">
-        <span>Превью черновиков</span>
-        <span class="chevron" aria-hidden="true"></span>
-      </button>
-      <div class="fold-body">
-        <div class="fold-inner">
-          <pre id="previewText" class="preview"></pre>
-          <h2>Поправить</h2>
-          <div id="editFields" class="edit-fields"></div>
-          <div class="row">
-            <button id="btnResetDraft" type="button" class="ghost" disabled>Сбросить</button>
-          </div>
-          <div class="row">
-            <button id="btnSend" type="button" class="primary" disabled>Отправить в чат</button>
-          </div>
-          <p id="sendStatus" class="status"></p>
+          <section class="card" id="choiceSection" hidden>
+            <h2>Перевозки за сегодня</h2>
+            <p class="hint">Найдено больше одной — выберите нужную.</p>
+            <div id="carriageChoices" class="choices"></div>
+          </section>
+
+          <section class="card fold" id="checklistSection" hidden>
+            <button type="button" class="fold-head" aria-expanded="false">
+              <span>Чек лист</span>
+              <span class="chevron" aria-hidden="true"></span>
+            </button>
+            <div class="fold-body">
+              <div class="fold-inner">
+                <ul id="checklist" class="checklist"></ul>
+                <ul id="warnings" class="warnings"></ul>
+              </div>
+            </div>
+          </section>
+
+          <section class="card fold" id="previewSection" hidden>
+            <button type="button" class="fold-head" aria-expanded="false">
+              <span>Превью черновиков</span>
+              <span class="chevron" aria-hidden="true"></span>
+            </button>
+            <div class="fold-body">
+              <div class="fold-inner">
+                <pre id="previewText" class="preview"></pre>
+                <section class="card fold" id="editSection">
+                  <button type="button" class="fold-head" aria-expanded="false">
+                    <span>Изменить</span>
+                    <span class="chevron" aria-hidden="true"></span>
+                  </button>
+                  <div class="fold-body">
+                    <div class="fold-inner">
+                      <div id="editFields" class="edit-fields"></div>
+                      <div class="row">
+                        <button id="btnResetDraft" type="button" class="ghost" disabled>Сбросить</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <div class="row">
+                  <button id="btnSend" type="button" class="primary" disabled>Отправить в чат</button>
+                </div>
+                <p id="sendStatus" class="status"></p>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </section>

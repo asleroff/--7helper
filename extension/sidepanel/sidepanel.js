@@ -312,6 +312,8 @@ function showDraft(draft) {
   els.pointBadge.className = 'badge ok';
   renderChecklist(draft);
   renderChoices(draft);
+  els.checklistSection.hidden = false;
+  els.previewSection.hidden = false;
   renderEditFields(draft);
   refreshPreview();
   els.btnSend.disabled = false;
