@@ -122,6 +122,12 @@ body {
 
 .fold-inner {
   overflow: hidden;
+  min-height: 0;
+}
+
+/* Внутри уже открытой плашки 0fr не схлопывает вложенные блоки. */
+.fold .fold:not(.open) > .fold-body {
+  display: none;
 }
 
 .fold.open .fold-inner {
@@ -157,9 +163,26 @@ body {
   color: #fff;
   font-weight: 600;
 }
+.row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.handed-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.handed-row label {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.handed-row button {
+  flex: 0 0 auto;
 }
 
 button {
@@ -260,10 +283,93 @@ label {
   cursor: not-allowed;
 }
 
+.qr {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.qr svg {
+  display: block;
+  width: 180px;
+  height: auto;
+}
+
+.photo-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.photo-tile {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.photo-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #001a34;
+  color: #fff;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 26, 52, 0.88);
+}
+
+.photo-viewer[hidden] {
+  display: none;
+}
+
+.photo-viewer img {
+  max-width: 100%;
+  max-height: calc(100% - 48px);
+  object-fit: contain;
+}
+
+.time-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.time-pair label {
+  flex: 1;
+  min-width: 0;
+}
+
 input[type="url"],
 input[type="password"],
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+input[type="file"] {
   display: block;
   width: 100%;
   margin-top: 4px;

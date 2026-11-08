@@ -15,6 +15,26 @@ const els = {
   btnMachineSend: document.getElementById('btnMachineSend'),
   machinePreview: document.getElementById('machinePreview'),
   machineStatus: document.getElementById('machineStatus'),
+  returnDate: document.getElementById('returnDate'),
+  returnDriver: document.getElementById('returnDriver'),
+  returnKindReturns: document.getElementById('returnKindReturns'),
+  returnKindZasyl: document.getElementById('returnKindZasyl'),
+  returnKindTare: document.getElementById('returnKindTare'),
+  returnFormedFrom: document.getElementById('returnFormedFrom'),
+  returnFormedTo: document.getElementById('returnFormedTo'),
+  returnHanded: document.getElementById('returnHanded'),
+  btnReturnPhone: document.getElementById('btnReturnPhone'),
+  returnQrHint: document.getElementById('returnQrHint'),
+  returnQr: document.getElementById('returnQr'),
+  returnPhotoHint: document.getElementById('returnPhotoHint'),
+  returnPhotoList: document.getElementById('returnPhotoList'),
+  returnViewer: document.getElementById('returnViewer'),
+  returnViewerImg: document.getElementById('returnViewerImg'),
+  returnViewerClose: document.getElementById('returnViewerClose'),
+  returnPreview: document.getElementById('returnPreview'),
+  btnReturnNow: document.getElementById('btnReturnNow'),
+  btnReturnSend: document.getElementById('btnReturnSend'),
+  returnStatus: document.getElementById('returnStatus'),
   status: document.getElementById('status'),
   progress: document.getElementById('progress'),
   choiceSection: document.getElementById('choiceSection'),
@@ -51,6 +71,10 @@ let originalDraft = null;
 let draftEdited = false;
 let currentPoint = '';
 let telegramLink = { linked: false, username: '', token: '' };
+let phoneToken = '';
+let phoneCount = 0;
+let phonePhotos = [];
+let phoneTimer = 0;
 
 const EDIT_FIELDS = [
   ['transport_number', 'Номер перевозки', 'text', true],
@@ -359,6 +383,8 @@ async function refreshPoint() {
   els.pointBadge.className = 'badge ok';
   currentPoint = String(point.point_number);
   renderMachinePreview();
+  renderReturnPreview();
+  suggestReturnDriver();
   setStatus(`Текущий пункт: ПП_${point.point_number}`);
 }
 
@@ -584,6 +610,260 @@ async function sendMachine() {
   els.machineStatus.className = 'status ok'
 }
 
+function todayShort() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
+  return `${dd}.${mm}.${yy}`;
+}
+
+function returnKinds() {
+  const kinds = [];
+  if (els.returnKindReturns.checked) kinds.push(['returns', 'возвраты']);
+  if (els.returnKindZasyl.checked) kinds.push(['zasyl', 'засылы']);
+  if (els.returnKindTare.checked) kinds.push(['tare', 'Тарные ящики']);
+  return kinds;
+}
+
+function renderReturnPreview() {
+  const point = currentPoint || '—';
+  const kinds = returnKinds().map((item) => item[1]);
+  const handedLine = kinds.length ? `Отдали ${kinds.join(', ')}` : 'Отдали —';
+  const formedFrom = els.returnFormedFrom.value.trim() || '—';
+  const formedTo = els.returnFormedTo.value.trim() || '—';
+  const handed = els.returnHanded.value.trim() || '—';
+  els.returnPreview.textContent = [
+    `ПП_${point}`,
+    els.returnDate.value.trim() || '—',
+    `Водитель ${els.returnDriver.value.trim() || '—'}`,
+    handedLine,
+    `Время формирования: ${formedFrom}-${formedTo}`,
+    `Время передачи водителю: ${handed}`,
+  ].join('\n');
+}
+
+async function apiCall(path, payload) {
+  const config = await loadConfig();
+  const res = await fetch(`${config.apiBaseUrl.replace(/\/$/, '')}${path}`, {
+    method: payload ? 'POST' : 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiToken}`,
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  const text = await res.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = { raw: text };
+  }
+  if (!res.ok) throw new Error(body?.error || `API ${res.status}`);
+  return body;
+}
+
+async function suggestReturnDriver() {
+  if (!/^\d{3,6}$/.test(currentPoint) || els.returnDriver.value.trim()) return;
+  try {
+    const body = await apiCall(`/api/driver/${currentPoint}`);
+    const name = (body.drivers || []).filter(Boolean).join(', ');
+    if (name && !els.returnDriver.value.trim()) {
+      els.returnDriver.value = name;
+      renderReturnPreview();
+    }
+  } catch {
+    /* список водителей необязателен */
+  }
+}
+
+async function sendReturns() {
+  if (!isLinked()) {
+    els.returnStatus.textContent = 'Сначала привяжите Telegram.';
+    els.returnStatus.className = 'status error';
+    return;
+  }
+  if (!/^\d{3,6}$/.test(currentPoint)) {
+    await refreshPoint();
+  }
+  if (!/^\d{3,6}$/.test(currentPoint)) {
+    els.returnStatus.textContent = 'Не вижу номер ПП. Откройте Турбо и нажмите «Обновить ПП».';
+    els.returnStatus.className = 'status error';
+    return;
+  }
+  if (!phoneCount) {
+    els.returnStatus.textContent = 'Сначала прикрепите фото с телефона.';
+    els.returnStatus.className = 'status error';
+    return;
+  }
+  els.btnReturnSend.disabled = true;
+  els.returnStatus.textContent = 'Отправляю в тему…';
+  els.returnStatus.className = 'status';
+  try {
+    await apiCall('/api/returns', {
+      point_number: currentPoint,
+      date: els.returnDate.value.trim(),
+      driver: els.returnDriver.value.trim(),
+      kinds: returnKinds().map((item) => item[0]),
+      formed_from: els.returnFormedFrom.value.trim(),
+      formed_to: els.returnFormedTo.value.trim(),
+      handed_at: els.returnHanded.value.trim(),
+      photos: [],
+      photo_token: phoneToken,
+      link_token: telegramLink.token,
+    });
+    els.returnStatus.textContent = `Отправлено в тему: ПП_${currentPoint}.`;
+    els.returnStatus.className = 'status ok';
+  } catch (error) {
+    els.returnStatus.textContent = error?.message || 'Не удалось отправить';
+    els.returnStatus.className = 'status error';
+  } finally {
+    els.btnReturnSend.disabled = false;
+  }
+}
+
+function maskClock(input) {
+  let digits = input.value.replace(/\D/g, '').slice(0, 4);
+  const growing = input.value.length >= (input.dataset.raw || '').length;
+  if (digits.length === 1 && growing && '3456789'.includes(digits)) {
+    digits = `0${digits}`;
+  } else if (digits.length >= 2 && Number(digits.slice(0, 2)) > 23) {
+    digits = `0${digits}`.slice(0, 4);
+  }
+  const next = digits.length >= 3 || (digits.length === 2 && growing)
+    ? `${digits.slice(0, 2)}:${digits.slice(2)}`
+    : digits;
+  input.dataset.raw = next;
+  if (input.value !== next) input.value = next;
+}
+
+els.returnDate.value = todayShort();
+renderReturnPreview();
+[
+  els.returnDate,
+  els.returnDriver,
+  els.returnKindReturns,
+  els.returnKindZasyl,
+  els.returnKindTare,
+].forEach((input) => input.addEventListener('input', renderReturnPreview));
+[els.returnFormedFrom, els.returnFormedTo, els.returnHanded].forEach((input) => {
+  input.addEventListener('input', () => {
+    maskClock(input);
+    renderReturnPreview();
+  });
+});
+function fileWord(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'файл';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'файла';
+  return 'файлов';
+}
+
+function renderPhotoHint() {
+  els.returnPhotoHint.textContent = phoneCount
+    ? `Прикреплено ${phoneCount} ${fileWord(phoneCount)}`
+    : 'Пока нет фото.';
+  els.returnPhotoList.replaceChildren();
+  for (const photo of phonePhotos) {
+    const tile = document.createElement('div');
+    tile.className = 'photo-tile';
+    const img = document.createElement('img');
+    img.src = `data:image/jpeg;base64,${photo.data}`;
+    img.alt = 'Фото акта';
+    img.addEventListener('click', () => {
+      els.returnViewerImg.src = img.src;
+      els.returnViewer.hidden = false;
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'photo-delete';
+    remove.textContent = '×';
+    remove.title = 'Удалить';
+    remove.addEventListener('click', () => deletePhonePhoto(photo.id));
+    tile.append(img, remove);
+    els.returnPhotoList.append(tile);
+  }
+}
+
+async function deletePhonePhoto(photoId) {
+  if (!phoneToken) return;
+  try {
+    const body = await apiCall(`/api/returns/photos/${phoneToken}/delete`, { id: photoId });
+    phonePhotos = phonePhotos.filter((photo) => photo.id !== photoId);
+    phoneCount = body.count ?? phonePhotos.length;
+    if (els.returnViewerImg.src && !phonePhotos.some((photo) => `data:image/jpeg;base64,${photo.data}` === els.returnViewerImg.src)) {
+      els.returnViewer.hidden = true;
+    }
+    renderPhotoHint();
+  } catch (error) {
+    els.returnStatus.textContent = error?.message || 'Не удалось удалить фото';
+    els.returnStatus.className = 'status error';
+  }
+}
+
+async function openPhoneUpload() {
+  if (!isLinked()) {
+    els.returnStatus.textContent = 'Сначала привяжите Telegram.';
+    els.returnStatus.className = 'status error';
+    return;
+  }
+  els.btnReturnPhone.disabled = true;
+  els.returnStatus.textContent = 'Готовлю код для телефона…';
+  els.returnStatus.className = 'status';
+  try {
+    const body = await apiCall('/api/returns/photos/session', { link_token: telegramLink.token });
+    phoneToken = body.token;
+    phoneCount = 0;
+    phonePhotos = [];
+    els.returnQr.innerHTML = body.qr_svg || '';
+    els.returnQrHint.hidden = false;
+    els.returnQr.hidden = false;
+    renderPhotoHint();
+    els.returnStatus.textContent = '';
+    els.returnStatus.className = 'status';
+    clearInterval(phoneTimer);
+    phoneTimer = setInterval(async () => {
+      if (!phoneToken) return;
+      try {
+        const fresh = await apiCall(`/api/returns/photos/${phoneToken}`);
+        const count = fresh.count || 0;
+        if (count !== phoneCount) {
+          phoneCount = count;
+          if (count) {
+            const files = await apiCall(`/api/returns/photos/${phoneToken}/files`);
+            phonePhotos = files.photos || [];
+          } else {
+            phonePhotos = [];
+          }
+          renderPhotoHint();
+        }
+      } catch {
+        /* ссылка ещё жива, просто нет ответа */
+      }
+    }, 2000);
+  } catch (error) {
+    els.returnStatus.textContent = error?.message || 'Не удалось сделать код';
+    els.returnStatus.className = 'status error';
+  } finally {
+    els.btnReturnPhone.disabled = false;
+  }
+}
+
+els.btnReturnPhone.addEventListener('click', openPhoneUpload);
+els.returnViewerClose.addEventListener('click', () => {
+  els.returnViewer.hidden = true;
+});
+els.returnViewer.addEventListener('click', (event) => {
+  if (event.target === els.returnViewer) els.returnViewer.hidden = true;
+});
+els.btnReturnNow.addEventListener('click', () => {
+  els.returnHanded.value = machineClock();
+  renderReturnPreview();
+});
+els.btnReturnSend.addEventListener('click', sendReturns);
+
 els.tabHome.addEventListener('click', () => showTab('home'));
 els.tabGiveout.addEventListener('click', () => showTab('giveout'));
 els.tabReports.addEventListener('click', () => showTab('reports'));
@@ -591,7 +871,10 @@ els.btnMachineNow.addEventListener('click', () => {
   els.machineTime.value = machineClock()
   renderMachinePreview()
 })
-els.machineTime.addEventListener('input', renderMachinePreview)
+els.machineTime.addEventListener('input', () => {
+  maskClock(els.machineTime);
+  renderMachinePreview();
+});
 els.btnMachineSend.addEventListener('click', sendMachine)
 document.querySelectorAll('.fold-head').forEach((button) => {
   button.addEventListener('click', () => {

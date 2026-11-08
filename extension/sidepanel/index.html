@@ -150,6 +150,71 @@
       </div>
     </section>
 
+    <section class="card fold" id="returnsSection">
+      <button type="button" class="fold-head" aria-expanded="false">
+        <span>Возвраты</span>
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+      <div class="fold-body">
+        <div class="fold-inner">
+          <p class="hint">Фиксация уйдёт в тему «передача возвратов водителю», не в чат пункта.</p>
+          <label>
+            Дата
+            <input id="returnDate" type="text" inputmode="numeric" placeholder="07.11.26" maxlength="8" autocomplete="off" />
+          </label>
+          <label>
+            Водитель
+            <input id="returnDriver" type="text" placeholder="Фамилия Имя Отчество" autocomplete="off" />
+          </label>
+          <label class="switch">
+            <input id="returnKindReturns" type="checkbox" checked />
+            <span>Возвраты</span>
+          </label>
+          <label class="switch">
+            <input id="returnKindZasyl" type="checkbox" checked />
+            <span>Засылы</span>
+          </label>
+          <label class="switch">
+            <input id="returnKindTare" type="checkbox" checked />
+            <span>Тарные ящики</span>
+          </label>
+          <div class="time-pair">
+            <label>
+              Формирование с
+              <input id="returnFormedFrom" type="text" inputmode="numeric" placeholder="09:10" maxlength="5" autocomplete="off" />
+            </label>
+            <label>
+              до
+              <input id="returnFormedTo" type="text" inputmode="numeric" placeholder="10:00" maxlength="5" autocomplete="off" />
+            </label>
+          </div>
+          <div class="handed-row">
+            <label>
+              Передача водителю
+              <input id="returnHanded" type="text" inputmode="numeric" placeholder="12:10" maxlength="5" autocomplete="off" />
+            </label>
+            <button id="btnReturnNow" type="button" class="ghost">Сейчас</button>
+          </div>
+          <div class="row">
+            <button id="btnReturnPhone" type="button" class="ghost">Добавить фото</button>
+          </div>
+          <p id="returnQrHint" class="hint" hidden>Наведите камеру телефона на код. Телефон должен быть в той же Wi‑Fi сети.</p>
+          <div id="returnQr" class="qr" hidden></div>
+          <p id="returnPhotoHint" class="hint">Пока нет фото.</p>
+          <div id="returnPhotoList" class="photo-list"></div>
+          <div id="returnViewer" class="photo-viewer" hidden>
+            <button id="returnViewerClose" type="button" class="ghost">Закрыть</button>
+            <img id="returnViewerImg" alt="Фото акта" />
+          </div>
+          <pre id="returnPreview" class="preview"></pre>
+          <div class="row">
+            <button id="btnReturnSend" type="button" class="primary">Отправить</button>
+          </div>
+          <p id="returnStatus" class="status"></p>
+        </div>
+      </div>
+    </section>
+
     <section class="card fold" id="machineSection">
       <button type="button" class="fold-head" aria-expanded="false">
         <span>Машина</span>
