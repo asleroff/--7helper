@@ -88,6 +88,7 @@ const EDIT_FIELDS = [
   ['zasyl', 'Засылы', 'number', false],
   ['issued', 'Выдано', 'number', false],
   ['leftover', 'Остатки', 'number', false],
+  ['ozon_shelf', 'Озон полка', 'number', false],
 ];
 
 function setStatus(text, kind = '') {
@@ -102,7 +103,7 @@ function bg(type, payload = {}) {
 function formatReportText(draft) {
   const c = draft.closing || {};
   const dash = (v) => (v == null || v === '' ? '—' : v);
-  return [
+  const lines = [
     `ПП-${draft.point_number}`,
     '',
     `Закрыли перевозку #${dash(c.transport_number)} от ${dash(c.transport_date)}.`,
@@ -120,9 +121,12 @@ function formatReportText(draft) {
     `Выдано: ${dash(c.issued)} ед.`,
     '',
     `Остатки на складе: ${dash(c.leftover)} ед.`,
-    '',
-    'ПП - закрыто.',
-  ].join('\n');
+  ];
+  if (draft.meta?.ozon_shelf_available !== false) {
+    lines.push(`Остатки на Озон полке: ${dash(c.ozon_shelf)} ед.`);
+  }
+  lines.push('', 'ПП - закрыто.');
+  return lines.join('\n');
 }
 
 function isLinked() {
@@ -184,12 +188,14 @@ function renderChecklist(draft) {
     point: 'ПП из шапки',
     issued: 'Выдано',
     leftover: 'Остатки',
+    ozon_shelf: 'Озон полка',
     tare: 'ТЯ / КТЯ',
     carriage: 'Перевозка',
     zasyl: 'Засылы',
   };
   els.checklist.innerHTML = '';
   for (const [key, label] of Object.entries(labels)) {
+    if (key === 'ozon_shelf' && draft.meta?.ozon_shelf_available === false) continue;
     const li = document.createElement('li');
     const ok = Boolean(cl[key]);
     li.className = ok ? 'ok' : 'bad';
@@ -256,6 +262,7 @@ function renderEditFields(draft) {
   const closing = draft.closing || {};
   els.editFields.innerHTML = '';
   for (const [key, label, kind, wide] of EDIT_FIELDS) {
+    if (key === 'ozon_shelf' && draft.meta?.ozon_shelf_available === false) continue;
     const wrap = document.createElement('label');
     wrap.className = wide ? 'edit-field wide' : 'edit-field';
     const title = document.createElement('span');
@@ -279,7 +286,7 @@ function markChecklist(key) {
   const closing = currentDraft.closing || {};
   if (key === 'tya' || key === 'ktya') {
     checklist.tare = closing.tya != null && closing.ktya != null;
-  } else if (key === 'issued' || key === 'leftover' || key === 'zasyl') {
+  } else if (key === 'issued' || key === 'leftover' || key === 'zasyl' || key === 'ozon_shelf') {
     checklist[key] = closing[key] != null;
   } else if (key === 'transport_number') {
     checklist.carriage = Boolean(closing.transport_number);
@@ -397,7 +404,7 @@ async function collect() {
   els.btnSend.disabled = true;
   els.progress.classList.remove('hidden');
   els.progress.textContent =
-    'Обход: выдача → остатки → тара → перевозки → засылы. Не переключайте ПП.';
+    'Обход: выдача → остатки → озон полка → тара → перевозки → засылы. Не переключайте ПП.';
   setStatus('Собираю закрытие…');
   try {
     const res = await bg('COLLECT_CLOSING');
@@ -444,6 +451,9 @@ function missingDraftFields(draft) {
     ['issued', 'выдано'],
     ['leftover', 'остатки'],
   ];
+  if (draft?.meta?.ozon_shelf_available !== false) {
+    labels.push(['ozon_shelf', 'остатки на Озон полке']);
+  }
   return labels
     .filter(([key]) => closing[key] == null || closing[key] === '')
     .map(([, label]) => label);

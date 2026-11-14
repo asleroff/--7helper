@@ -72,6 +72,7 @@ REQUIRED_CLOSING = (
     ("zasyl", "засылы"),
     ("issued", "выдано"),
     ("leftover", "остатки"),
+    ("ozon_shelf", "остатки на Озон полке"),
 )
 
 _lock = threading.Lock()
@@ -102,29 +103,29 @@ def render_text(draft: dict) -> str:
     def dash(v):
         return "—" if v is None or v == "" else v
 
-    return "\n".join(
-        [
-            f"ПП-{point}",
-            "",
-            f"Закрыли перевозку #{dash(c.get('transport_number'))} от {dash(c.get('transport_date'))}.",
-            "",
-            f"Закрыли перевозку в {dash(c.get('closing_time'))}",
-            "",
-            f"Принято всего: {dash(c.get('accepted_total'))} ед.",
-            "",
-            f"1) ТЯ: {dash(c.get('tya'))}",
-            f"2) КТЯ: {dash(c.get('ktya'))}",
-            f"3) Недостачи: {dash(c.get('shortage'))}",
-            f"4) Излишки: {dash(c.get('excess'))}",
-            f"5) Засылы: {dash(c.get('zasyl'))}",
-            "",
-            f"Выдано: {dash(c.get('issued'))} ед.",
-            "",
-            f"Остатки на складе: {dash(c.get('leftover'))} ед.",
-            "",
-            "ПП - закрыто.",
-        ]
-    )
+    lines = [
+        f"ПП-{point}",
+        "",
+        f"Закрыли перевозку #{dash(c.get('transport_number'))} от {dash(c.get('transport_date'))}.",
+        "",
+        f"Закрыли перевозку в {dash(c.get('closing_time'))}",
+        "",
+        f"Принято всего: {dash(c.get('accepted_total'))} ед.",
+        "",
+        f"1) ТЯ: {dash(c.get('tya'))}",
+        f"2) КТЯ: {dash(c.get('ktya'))}",
+        f"3) Недостачи: {dash(c.get('shortage'))}",
+        f"4) Излишки: {dash(c.get('excess'))}",
+        f"5) Засылы: {dash(c.get('zasyl'))}",
+        "",
+        f"Выдано: {dash(c.get('issued'))} ед.",
+        "",
+        f"Остатки на складе: {dash(c.get('leftover'))} ед.",
+    ]
+    if draft.get("meta", {}).get("ozon_shelf_available") is not False:
+        lines.append(f"Остатки на Озон полке: {dash(c.get('ozon_shelf'))} ед.")
+    lines.extend(["", "ПП - закрыто."])
+    return "\n".join(lines)
 
 
 class PublishError(Exception):
@@ -136,7 +137,10 @@ class PublishError(Exception):
 def missing_closing(draft: dict) -> list[str]:
     closing = draft.get("closing") or {}
     missing = []
+    shelf_off = (draft.get("meta") or {}).get("ozon_shelf_available") is False
     for key, label in REQUIRED_CLOSING:
+        if key == "ozon_shelf" and shelf_off:
+            continue
         value = closing.get(key)
         if value is None or value == "":
             missing.append(label)

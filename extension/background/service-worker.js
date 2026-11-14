@@ -83,17 +83,27 @@ async function findTurboTab() {
 }
 
 async function ensureContentScript(tabId) {
-  try {
-    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
-    return true;
-  } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: CONTENT_FILES,
-    });
-    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
-    return true;
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+      return true;
+    } catch (err) {
+      lastError = err;
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: CONTENT_FILES,
+        });
+        await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+        return true;
+      } catch (injectErr) {
+        lastError = injectErr;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error('Скрипт страницы не запустился');
 }
 
 function waitTabComplete(tabId, timeoutMs = 45000) {
@@ -123,17 +133,73 @@ function waitTabComplete(tabId, timeoutMs = 45000) {
   });
 }
 
-async function navigateAndReady(tabId, url, settleMs) {
-  await chrome.tabs.update(tabId, { url, active: true });
-  await waitTabComplete(tabId);
-  await ensureContentScript(tabId);
-  // Extra settle for SPA hydration
-  await new Promise((r) => setTimeout(r, settleMs));
+function sameDocument(tabUrl, wanted) {
+  try {
+    const current = new URL(tabUrl);
+    const target = new URL(wanted);
+    return current.origin === target.origin && current.pathname === target.pathname && current.search === target.search;
+  } catch {
+    return false;
+  }
 }
 
-async function send(tabId, message) {
+function waitForUrl(tabId, url, previousUrl, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let sawLoading = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      clearTimeout(fail);
+      fn(value);
+    };
+    const timer = setInterval(async () => {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (tab.status === 'loading') sawLoading = true;
+        if (!sameDocument(tab.url, url)) return;
+        const changed = Boolean(tab.url && tab.url !== previousUrl);
+        if (tab.status === 'complete' && (changed || sawLoading)) {
+          finish(resolve);
+        }
+      } catch (err) {
+        finish(reject, err);
+      }
+    }, 150);
+    const fail = setTimeout(async () => {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (sameDocument(tab.url, url)) finish(resolve);
+        else finish(reject, new Error('Таймаут загрузки вкладки'));
+      } catch (err) {
+        finish(reject, err);
+      }
+    }, timeoutMs);
+  });
+}
+
+async function navigateAndReady(tabId, url, settleMs, timeoutMs = 15000) {
+  const previous = await chrome.tabs.get(tabId);
+  await chrome.tabs.update(tabId, { url, active: true });
+  await waitForUrl(tabId, url, previous.url, timeoutMs);
   await ensureContentScript(tabId);
-  return chrome.tabs.sendMessage(tabId, message);
+  if (settleMs) await new Promise((r) => setTimeout(r, settleMs));
+}
+
+async function send(tabId, message, timeoutMs = 0) {
+  await ensureContentScript(tabId);
+  const job = chrome.tabs.sendMessage(tabId, message);
+  if (!timeoutMs) return job;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Таймаут ответа страницы')), timeoutMs);
+  });
+  try {
+    return await Promise.race([job, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function emptyClosing() {
@@ -149,6 +215,7 @@ function emptyClosing() {
     zasyl: null,
     issued: null,
     leftover: null,
+    ozon_shelf: null,
   };
 }
 
@@ -161,6 +228,7 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
     point: false,
     issued: false,
     leftover: false,
+    ozon_shelf: false,
     tare: false,
     carriage: false,
     zasyl: false,
@@ -187,6 +255,7 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
   const today = urlsRes.today;
 
   const closing = emptyClosing();
+  let ozonShelfAvailable = true;
   closing.transport_date = today.displayDate;
   let carriageLongId = selectedCarriageLongId || null;
   let carriageChoices = [];
@@ -253,6 +322,27 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
     }
   } catch (e) {
     warnings.push(`Остатки: ${e.message}`);
+  }
+
+  // 2b) Озон полка. Если пункт без этой функции, страница отвечает «Доступ запрещён» — строку в отчёт не пишем.
+  try {
+    await navigateAndReady(tabId, urls.ozonShelf, 200, 8000);
+    const shelf = await send(tabId, { type: 'SCRAPE_OZON_SHELF' }, 8000);
+    if (shelf?.unavailable) {
+      ozonShelfAvailable = false;
+      delete closing.ozon_shelf;
+      delete checklist.ozon_shelf;
+    } else {
+      pages.push('micro-ff-stock');
+      if (shelf?.ok) {
+        closing.ozon_shelf = shelf.value;
+        checklist.ozon_shelf = true;
+      } else {
+        warnings.push(shelf?.error || 'Озон полка: не собрано');
+      }
+    }
+  } catch (e) {
+    warnings.push(`Озон полка: ${e.message}`);
   }
 
   // 3) Tare TYA/KTYA
@@ -401,6 +491,7 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
       checklist,
       carriage_choices: carriageChoices,
       accepted_today_card: carriagesPayload?.accepted_today_card ?? null,
+      ozon_shelf_available: ozonShelfAvailable,
     },
   };
 

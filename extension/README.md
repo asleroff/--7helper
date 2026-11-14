@@ -13,9 +13,10 @@ Service worker последовательно открывает на актив
 
 1. `/reports/giveout?filter=…сегодня…` → кнопка **Найти** → «Найдено» = выдано
 2. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_POSTING"]}` → Тип=Отправления → **Найти** → «Найдено» = остатки
-3. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE"]}` → Тип=Тарный ящик → **Найти** → тара по всем страницам; КТЯ=строки с «КТЯ»; ТЯ=Найдено−КТЯ
-4. Приёмка → завершённые `/carriages_list/finished` → дата сегодня → одна перевозка подставляется сама, несколько нужно выбрать
-5. `/carriages_list/finished-carriage-detail/{id}` → Статус=«Засыл» → «Найдено» / строки
+3. `/reports/micro-ff-stock` → «Всего» = остатки на Озон полке. Кнопку «Найти» не нажимать: она ищет товар по штрихкоду
+4. `/reports/remains?filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE"]}&pagination={"page":1,"rowsPerPage":100}` → Тип=Тарный ящик, 100 строк → **Найти** → КТЯ=строки с «КТЯ»; ТЯ=Найдено−КТЯ
+5. Приёмка → завершённые `/carriages_list/finished` → дата сегодня → одна перевозка подставляется сама, несколько нужно выбрать
+6. `/carriages_list/finished-carriage-detail/{id}` → Статус=«Засыл» → «Найдено» / строки
 
 ПП читается из шапки (`ПП_1125`). Если не найден — сбор не стартует.
 

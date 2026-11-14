@@ -68,6 +68,8 @@
             diagnostics: prep.diagnostics,
           };
         }
+        case 'SCRAPE_OZON_SHELF':
+          return api.scrapeOzonShelf();
         case 'SCRAPE_TARE': {
           const hrefDecoded = decodeURIComponent(location.href || '');
           const hasTareFilter = hrefDecoded.includes('GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE');
@@ -129,6 +131,7 @@
             urls: {
               giveout: api.buildGiveoutUrl(),
               remains: api.buildRemainsUrl(),
+              ozonShelf: api.buildOzonShelfUrl(),
               tare: api.buildTareUrl(),
               carriages: api.buildCarriagesUrl(),
               carriageDetail: message.longId ? api.buildCarriageDetailUrl(message.longId) : null,

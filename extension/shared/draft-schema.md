@@ -16,7 +16,8 @@
     "excess": 3,
     "zasyl": 3,
     "issued": 721,
-    "leftover": 1527
+    "leftover": 1527,
+    "ozon_shelf": 40
   },
   "meta": {
     "carriage_long_id": "...",
@@ -47,6 +48,7 @@
 Выдано: {issued} ед.
 
 Остатки на складе: {leftover} ед.
+Остатки на Озон полке: {ozon_shelf} ед.
 
 ПП - закрыто.
 ```

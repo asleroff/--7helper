@@ -230,11 +230,68 @@ function buildRemainsUrl() {
 
 
 function buildTareUrl() {
-  // Отчёты → Остатки → Тип = «Тарный ящик» → Найти
-  // filter={"filter":["GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE"]}
-  const filter = { filter: ['GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE'] };
-  const encoded = encodeURIComponent(JSON.stringify(filter));
-  return `https://turbo-pvz.ozon.ru/reports/remains?filter=${encoded}`;
+  // Отчёты → Остатки → Тип = «Тарный ящик», 100 строк на странице.
+  const filter = encodeURIComponent(JSON.stringify({ filter: ['GRPC_REMNANT_FILTER_ARTICLE_BOX_TARE'] }));
+  const pagination = encodeURIComponent(JSON.stringify({ page: 1, rowsPerPage: 100 }));
+  return `https://turbo-pvz.ozon.ru/reports/remains?filter=${filter}&pagination=${pagination}`;
+}
+
+
+function buildOzonShelfUrl() {
+  return 'https://turbo-pvz.ozon.ru/reports/micro-ff-stock';
+}
+
+
+function ozonShelfDenied() {
+  const href = location.href || '';
+  if (/forbidden/i.test(href)) return true;
+  const text = document.body?.innerText || '';
+  return /доступ запрещ/i.test(text);
+}
+
+
+async function scrapeOzonShelf() {
+  const href = location.href || '';
+  if (!href.includes('/reports/micro-ff-stock')) {
+    return {
+      ok: false,
+      error: 'Озон полка: открыта не та страница, сбор пошёл дальше',
+      diagnostics: pageDiagnostics(),
+    };
+  }
+
+  if (ozonShelfDenied()) {
+    return { ok: false, unavailable: true };
+  }
+
+  // Итог на странице — «Всего». «Найти» здесь ищет товар по штрихкоду, её не жмём.
+  let total = scrapeTotalCount();
+  if (!total.ok) {
+    try {
+      const ready = await waitFor(
+        () => {
+          if (ozonShelfDenied()) return { unavailable: true };
+          const next = scrapeTotalCount();
+          return next.ok ? next : null;
+        },
+        { timeoutMs: 4000, intervalMs: 200 }
+      );
+      if (ready?.unavailable) return { ok: false, unavailable: true };
+      total = ready;
+    } catch (_) {
+      if (ozonShelfDenied()) return { ok: false, unavailable: true };
+      total = scrapeTotalCount();
+    }
+  }
+
+  if (!total?.ok) {
+    return {
+      ok: false,
+      error: 'Озон полка: нет строки «Всего». Остальные пункты отчёта собираются дальше',
+      diagnostics: pageDiagnostics(),
+    };
+  }
+  return { ok: true, value: total.value, diagnostics: pageDiagnostics() };
 }
 
 
@@ -262,5 +319,5 @@ async function settle(ms = 400) {
   await waitUntil(reportPageReady, Math.min(ms, 1200));
 }
 
-  Object.assign(api, { getPointNumber, clickFindButton, prepareReportPage, buildGiveoutUrl, buildRemainsUrl, buildTareUrl, buildCarriagesUrl, buildCarriageDetailUrl, reportPageReady, settle });
+  Object.assign(api, { getPointNumber, clickFindButton, prepareReportPage, buildGiveoutUrl, buildRemainsUrl, buildTareUrl, buildOzonShelfUrl, scrapeOzonShelf, buildCarriagesUrl, buildCarriageDetailUrl, reportPageReady, settle });
 })();
