@@ -77,18 +77,12 @@ let phonePhotos = [];
 let phoneTimer = 0;
 
 const EDIT_FIELDS = [
-  ['transport_number', 'Номер перевозки', 'text', true],
-  ['transport_date', 'Дата', 'text', true],
-  ['closing_time', 'Время', 'text', true],
   ['accepted_total', 'Принято', 'number', false],
-  ['tya', 'ТЯ', 'number', false],
-  ['ktya', 'КТЯ', 'number', false],
-  ['shortage', 'Недостачи', 'number', false],
-  ['excess', 'Излишки', 'number', false],
-  ['zasyl', 'Засылы', 'number', false],
+  ['not_accepted', 'Не принято', 'number', false],
   ['issued', 'Выдано', 'number', false],
-  ['leftover', 'Остатки', 'number', false],
-  ['ozon_shelf', 'Озон полка', 'number', false],
+  ['leftover', 'Остаток', 'number', false],
+  ['ozon_shelf', 'Остаток полка', 'number', false],
+  ['closing_time', 'Машина', 'text', false],
 ];
 
 function setStatus(text, kind = '') {
@@ -104,28 +98,19 @@ function formatReportText(draft) {
   const c = draft.closing || {};
   const dash = (v) => (v == null || v === '' ? '—' : v);
   const lines = [
-    `ПП-${draft.point_number}`,
+    `ПП_${draft.point_number}`,
     '',
-    `Закрыли перевозку #${dash(c.transport_number)} от ${dash(c.transport_date)}.`,
-    '',
-    `Закрыли перевозку в ${dash(c.closing_time)}`,
-    '',
-    `Принято всего: ${dash(c.accepted_total)} ед.`,
-    '',
-    `1) ТЯ: ${dash(c.tya)}`,
-    `2) КТЯ: ${dash(c.ktya)}`,
-    `3) Недостачи: ${dash(c.shortage)}`,
-    `4) Излишки: ${dash(c.excess)}`,
-    `5) Засылы: ${dash(c.zasyl)}`,
-    '',
-    `Выдано: ${dash(c.issued)} ед.`,
-    '',
-    `Остатки на складе: ${dash(c.leftover)} ед.`,
+    'Перевозку закрыли',
+    `Принято: ${dash(c.accepted_total)}`,
+    `Не принято: ${dash(c.not_accepted)}`,
+    `Выдано: ${dash(c.issued)}`,
+    `Остаток: ${dash(c.leftover)}`,
   ];
   if (draft.meta?.ozon_shelf_available !== false) {
-    lines.push(`Остатки на Озон полке: ${dash(c.ozon_shelf)} ед.`);
+    lines.push(`Остаток полка: ${dash(c.ozon_shelf)}`);
   }
-  lines.push('', 'ПП - закрыто.');
+  lines.push(`Машина была в ${dash(c.closing_time)}`);
+  lines.push('ПП закрыто');
   return lines.join('\n');
 }
 
@@ -187,11 +172,11 @@ function renderChecklist(draft) {
   const labels = {
     point: 'ПП из шапки',
     issued: 'Выдано',
-    leftover: 'Остатки',
-    ozon_shelf: 'Озон полка',
-    tare: 'ТЯ / КТЯ',
-    carriage: 'Перевозка',
-    zasyl: 'Засылы',
+    leftover: 'Остаток',
+    accepted: 'Принято',
+    not_accepted: 'Не принято',
+    ozon_shelf: 'Остаток полка',
+    machine: 'Машина',
   };
   els.checklist.innerHTML = '';
   for (const [key, label] of Object.entries(labels)) {
@@ -286,8 +271,8 @@ function markChecklist(key) {
   const closing = currentDraft.closing || {};
   if (key === 'tya' || key === 'ktya') {
     checklist.tare = closing.tya != null && closing.ktya != null;
-  } else if (key === 'issued' || key === 'leftover' || key === 'zasyl' || key === 'ozon_shelf') {
-    checklist[key] = closing[key] != null;
+  } else if (key === 'issued' || key === 'leftover' || key === 'zasyl' || key === 'ozon_shelf' || key === 'not_accepted' || key === 'accepted_total') {
+    checklist[key === 'accepted_total' ? 'accepted' : key] = closing[key] != null;
   } else if (key === 'transport_number') {
     checklist.carriage = Boolean(closing.transport_number);
   }
@@ -404,10 +389,13 @@ async function collect() {
   els.btnSend.disabled = true;
   els.progress.classList.remove('hidden');
   els.progress.textContent =
-    'Обход: выдача → остатки → озон полка → тара → перевозки → засылы. Не переключайте ПП.';
+    'Обход: выдача → остатки → озон полка → принято. Не переключайте ПП.';
   setStatus('Собираю закрытие…');
   try {
-    const res = await bg('COLLECT_CLOSING');
+    const typedMachine = els.machineTime.value.trim();
+    const res = await bg('COLLECT_CLOSING', {
+      machineTime: /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(typedMachine) ? typedMachine : '',
+    });
     if (!res?.ok) {
       setStatus(res?.error || 'Ошибка сбора', 'error');
       return;
@@ -439,20 +427,14 @@ async function collect() {
 function missingDraftFields(draft) {
   const closing = draft?.closing || {};
   const labels = [
-    ['transport_number', 'номер перевозки'],
-    ['transport_date', 'дата перевозки'],
-    ['closing_time', 'время закрытия'],
+    ['closing_time', 'время машины'],
     ['accepted_total', 'принято'],
-    ['tya', 'ТЯ'],
-    ['ktya', 'КТЯ'],
-    ['shortage', 'недостачи'],
-    ['excess', 'излишки'],
-    ['zasyl', 'засылы'],
+    ['not_accepted', 'не принято'],
     ['issued', 'выдано'],
-    ['leftover', 'остатки'],
+    ['leftover', 'остаток'],
   ];
   if (draft?.meta?.ozon_shelf_available !== false) {
-    labels.push(['ozon_shelf', 'остатки на Озон полке']);
+    labels.push(['ozon_shelf', 'остаток полка']);
   }
   return labels
     .filter(([key]) => closing[key] == null || closing[key] === '')

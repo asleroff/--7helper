@@ -216,10 +216,26 @@ function emptyClosing() {
     issued: null,
     leftover: null,
     ozon_shelf: null,
+    not_accepted: null,
   };
 }
 
-async function collectClosing({ selectedCarriageLongId } = {}) {
+function validClock(value) {
+  return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(value || '').trim());
+}
+
+async function lookupMachineTime(pointNumber) {
+  const config = await loadConfig();
+  const url = `${config.apiBaseUrl.replace(/\/$/, '')}/api/machine-time/${pointNumber}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${config.apiToken}` },
+  });
+  if (!res.ok) return null;
+  const body = await res.json();
+  return validClock(body?.time) ? body.time : null;
+}
+
+async function collectClosing({ selectedCarriageLongId, machineTime } = {}) {
   const config = await loadConfig();
   const settleMs = config.pageSettleMs || 2500;
   const warnings = [];
@@ -228,10 +244,10 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
     point: false,
     issued: false,
     leftover: false,
+    accepted: false,
+    not_accepted: false,
     ozon_shelf: false,
-    tare: false,
-    carriage: false,
-    zasyl: false,
+    machine: false,
   };
 
   let tab = await findTurboTab();
@@ -345,138 +361,42 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
     warnings.push(`Озон полка: ${e.message}`);
   }
 
-  // 3) Tare TYA/KTYA
-  try {
-    await navigateAndReady(tabId, urls.tare, 300);
-    const tare = await send(tabId, { type: 'SCRAPE_TARE', settleMs: 200 });
-    pages.push('tare');
-    if (tare?.ok) {
-      closing.tya = tare.tya;
-      closing.ktya = tare.ktya;
-      checklist.tare = true;
-      if (tare.warnings?.length) warnings.push(...tare.warnings);
-    } else {
-      warnings.push(tare?.error || 'Тара: не собрано');
-    }
-  } catch (e) {
-    warnings.push(`Тара: ${e.message}`);
-  }
-
-  // 4) Carriages
+  // 3) Перевозки: только «сегодня принято» и «не принято». Время машины отсюда не берём.
   let carriagesPayload = null;
-  let chosen = null;
   try {
     await navigateAndReady(tabId, urls.carriages, settleMs);
     carriagesPayload = await send(tabId, { type: 'SCRAPE_CARRIAGES', settleMs: 400 });
     pages.push('carriages');
+    if (carriagesPayload?.accepted_today_card != null) {
+      closing.accepted_total = carriagesPayload.accepted_today_card;
+      checklist.accepted = true;
+    }
+    if (carriagesPayload?.not_accepted_today != null) {
+      closing.not_accepted = carriagesPayload.not_accepted_today;
+      checklist.not_accepted = true;
+    } else {
+      warnings.push('Не принято: нет «Сегодня принято» или колонки «Отправлений»');
+    }
     if (carriagesPayload?.warnings?.length) warnings.push(...carriagesPayload.warnings);
-
-    const todayOnly = carriagesPayload?.today_carriages || [];
-    const allCarriages = carriagesPayload?.carriages || [];
-    let todayList = todayOnly.length ? todayOnly : [];
-    if (!todayList.length && allCarriages.length) {
-      todayList = allCarriages;
-      warnings.push(
-        'Не удалось уверенно отфильтровать перевозки «за сегодня» по дате закрытия — показаны все найденные. Проверьте выбор.'
-      );
-    }
-
-    carriageChoices = todayList.map((c, i) => ({
-      index: i,
-      transport_number: c.transport_number,
-      carriage_long_id: c.carriage_long_id,
-      closing_time: c.closing_time,
-      transport_date: c.transport_date,
-      accepted: c.accepted,
-      shortage: c.shortage,
-      excess: c.excess,
-      row_preview: c.row_preview,
-      is_today: c.is_today,
-    }));
-
-    if (!carriageChoices.length) {
-      warnings.push('За сегодня перевозок не найдено');
-    } else if (carriageChoices.length > 1 && !selectedCarriageLongId) {
-      warnings.push(
-        `Найдено перевозок: ${carriageChoices.length}. Выберите нужную в панели — в черновик она сама не подставится.`
-      );
-    }
-
-    if (selectedCarriageLongId) {
-      chosen =
-        carriageChoices.find((c) => c.carriage_long_id === selectedCarriageLongId) ||
-        carriageChoices.find((c) => c.transport_number === selectedCarriageLongId) ||
-        (carriagesPayload.carriages || []).find((c) => c.carriage_long_id === selectedCarriageLongId);
-    } else if (carriageChoices.length === 1) {
-      chosen = carriageChoices[0];
-    }
-
-    if (chosen) {
-      applyCarriage(closing, chosen, carriagesPayload?.accepted_today_card);
-      carriageLongId = chosen.carriage_long_id || null;
-      checklist.carriage = Boolean(chosen.transport_number);
-    }
   } catch (e) {
     warnings.push(`Перевозки: ${e.message}`);
   }
 
-  // 5) Zasyl — в таблице часто нет href, только клик по строке → URL .../finished-carriage-detail/{longId}
-  const chosenTransport = closing.transport_number || chosen?.transport_number || null;
-
-  if (carriageChoices.length > 1 && !chosen) {
-    warnings.push('Засылы не собраны: выберите перевозку в панели и отправьте черновик после этого.');
-  } else if (!carriageLongId && chosenTransport) {
-    try {
-      await navigateAndReady(tabId, urls.carriages, settleMs);
-      const opened = await send(tabId, {
-        type: 'OPEN_CARRIAGE',
-        transportNumber: chosenTransport,
-      });
-      if (opened?.ok && opened.carriage_long_id) {
-        carriageLongId = opened.carriage_long_id;
-        if (chosen) chosen.carriage_long_id = carriageLongId;
-        const choice = carriageChoices.find((c) => c.transport_number === chosenTransport);
-        if (choice) choice.carriage_long_id = carriageLongId;
-      } else {
-        warnings.push(opened?.error || `Не удалось открыть карточку перевозки #${chosenTransport}`);
-      }
-    } catch (e) {
-      warnings.push(`Открытие карточки перевозки: ${e.message}`);
-    }
-  }
-
-  if (carriageLongId) {
-    try {
-      const detailUrl = `https://turbo-pvz.ozon.ru/carriages_list/finished-carriage-detail/${carriageLongId}`;
-      // Если уже на карточке после клика — не перезагружаем зря
-      const tabInfo = await chrome.tabs.get(tabId);
-      const alreadyThere = tabInfo.url && tabInfo.url.includes(`finished-carriage-detail/${carriageLongId}`);
-      if (!alreadyThere) {
-        await navigateAndReady(tabId, detailUrl, 0);
-      } else {
-        await ensureContentScript(tabId);
-      }
-      const zasyl = await send(tabId, { type: 'SCRAPE_ZASYL', settleMs: 200 });
-      pages.push('zasyl');
-      if (zasyl?.ok) {
-        closing.zasyl = zasyl.value;
-        checklist.zasyl = true;
-        if (zasyl.warnings?.length) warnings.push(...zasyl.warnings);
-        if (zasyl.method && zasyl.method.includes('found')) {
-          // ок — взяли из «Найдено», без перебора строк
-        } else if (zasyl.value === 0 && zasyl.method === 'status-rows') {
-          warnings.push('Засылы = 0 по строкам таблицы. Проверьте, что фильтр «Засыл» реально применился.');
-        }
-      } else {
-        warnings.push(zasyl?.error || 'Засылы: не собрано');
-      }
-    } catch (e) {
-      warnings.push(`Засылы: ${e.message}`);
-    }
+  if (validClock(machineTime)) {
+    closing.closing_time = String(machineTime).trim();
+    checklist.machine = true;
   } else {
-    warnings.push(
-      'Засылы пропущены: не удалось получить long id (в таблице нет ссылки, клик по строке не открыл карточку).'
-    );
+    try {
+      const fromChat = await lookupMachineTime(pointNumber);
+      if (fromChat) {
+        closing.closing_time = fromChat;
+        checklist.machine = true;
+      } else {
+        warnings.push('Машина: время не найдено. Напишите его в блоке «Машина» или в чате пункта.');
+      }
+    } catch (e) {
+      warnings.push(`Машина: ${e.message}`);
+    }
   }
 
   const draft = {
@@ -502,7 +422,6 @@ async function collectClosing({ selectedCarriageLongId } = {}) {
 function applyCarriage(closing, chosen, acceptedCard) {
   closing.transport_number = chosen.transport_number || null;
   if (chosen.transport_date) closing.transport_date = chosen.transport_date;
-  closing.closing_time = chosen.closing_time || null;
   closing.shortage = chosen.shortage;
   closing.excess = chosen.excess;
   // «Принято всего» = карточка «Сегодня принято», НЕ колонка «Отправлений» у перевозки
@@ -542,7 +461,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const run = async () => {
     switch (message?.type) {
       case 'COLLECT_CLOSING':
-        return collectClosing({ selectedCarriageLongId: message.selectedCarriageLongId });
+        return collectClosing({
+          selectedCarriageLongId: message.selectedCarriageLongId,
+          machineTime: message.machineTime,
+        });
       case 'APPLY_CARRIAGE_CHOICE': {
         const { lastDraft } = await chrome.storage.session.get('lastDraft');
         if (!lastDraft) throw new Error('Нет черновика — сначала соберите закрытие');

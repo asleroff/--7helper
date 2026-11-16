@@ -258,9 +258,24 @@ function scrapeFinishedCarriages() {
   }
 
   const todayList = carriages.filter((c) => c.is_today);
+  const shipmentRows = todayList.length ? todayList : carriages;
+  const shipmentValues = shipmentRows
+    .map((row) => row.accepted)
+    .filter((value) => value != null);
+  let notAccepted = null;
+  if (acceptedToday != null && shipmentValues.length) {
+    const shipmentsTotal = shipmentValues.reduce((sum, value) => sum + value, 0);
+    notAccepted = shipmentsTotal - acceptedToday;
+    if (notAccepted < 0) {
+      warnings.push(
+        `Не принято получилось ${notAccepted}: отправлений ${shipmentsTotal}, принято ${acceptedToday}`
+      );
+    }
+  }
   return {
     ok: true,
     accepted_today_card: acceptedToday,
+    not_accepted_today: notAccepted,
     carriages,
     today_carriages: todayList,
     warnings,

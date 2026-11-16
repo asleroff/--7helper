@@ -10,6 +10,7 @@
     "transport_date": "31.10.2026",
     "closing_time": "18:23",
     "accepted_total": 801,
+    "not_accepted": 331,
     "tya": 18,
     "ktya": 4,
     "shortage": 1,
@@ -31,24 +32,16 @@
 Целевой текст в боте:
 
 ```
-ПП-{point_number}
+ПП_{point_number}
 
-Закрыли перевозку #{transport_number} от {transport_date}.
-
-Закрыли перевозку в {closing_time}
-
-Принято всего: {accepted_total} ед.
-
-1) ТЯ: {tya}
-2) КТЯ: {ktya}
-3) Недостачи: {shortage}
-4) Излишки: {excess}
-5) Засылы: {zasyl}
-
-Выдано: {issued} ед.
-
-Остатки на складе: {leftover} ед.
-Остатки на Озон полке: {ozon_shelf} ед.
-
-ПП - закрыто.
+Перевозку закрыли
+Принято: {accepted_total}
+Не принято: {not_accepted}
+Выдано: {issued}
+Остаток: {leftover}
+Остаток полка: {ozon_shelf}
+Машина была в {closing_time}
+ПП закрыто
 ```
+
+Строка «Остаток полка» не пишется, если на пункте нет Озон полки.

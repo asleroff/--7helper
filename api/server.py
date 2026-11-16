@@ -61,18 +61,12 @@ BOT_DB = SEVEN_BOT / "bot_database.db"
 _bot_username: str | None = None
 
 REQUIRED_CLOSING = (
-    ("transport_number", "номер перевозки"),
-    ("transport_date", "дата перевозки"),
-    ("closing_time", "время закрытия"),
+    ("closing_time", "время машины"),
     ("accepted_total", "принято"),
-    ("tya", "ТЯ"),
-    ("ktya", "КТЯ"),
-    ("shortage", "недостачи"),
-    ("excess", "излишки"),
-    ("zasyl", "засылы"),
+    ("not_accepted", "не принято"),
     ("issued", "выдано"),
-    ("leftover", "остатки"),
-    ("ozon_shelf", "остатки на Озон полке"),
+    ("leftover", "остаток"),
+    ("ozon_shelf", "остаток полка"),
 )
 
 _lock = threading.Lock()
@@ -104,27 +98,18 @@ def render_text(draft: dict) -> str:
         return "—" if v is None or v == "" else v
 
     lines = [
-        f"ПП-{point}",
+        f"ПП_{point}",
         "",
-        f"Закрыли перевозку #{dash(c.get('transport_number'))} от {dash(c.get('transport_date'))}.",
-        "",
-        f"Закрыли перевозку в {dash(c.get('closing_time'))}",
-        "",
-        f"Принято всего: {dash(c.get('accepted_total'))} ед.",
-        "",
-        f"1) ТЯ: {dash(c.get('tya'))}",
-        f"2) КТЯ: {dash(c.get('ktya'))}",
-        f"3) Недостачи: {dash(c.get('shortage'))}",
-        f"4) Излишки: {dash(c.get('excess'))}",
-        f"5) Засылы: {dash(c.get('zasyl'))}",
-        "",
-        f"Выдано: {dash(c.get('issued'))} ед.",
-        "",
-        f"Остатки на складе: {dash(c.get('leftover'))} ед.",
+        "Перевозку закрыли",
+        f"Принято: {dash(c.get('accepted_total'))}",
+        f"Не принято: {dash(c.get('not_accepted'))}",
+        f"Выдано: {dash(c.get('issued'))}",
+        f"Остаток: {dash(c.get('leftover'))}",
     ]
     if draft.get("meta", {}).get("ozon_shelf_available") is not False:
-        lines.append(f"Остатки на Озон полке: {dash(c.get('ozon_shelf'))} ед.")
-    lines.extend(["", "ПП - закрыто."])
+        lines.append(f"Остаток полка: {dash(c.get('ozon_shelf'))}")
+    lines.append(f"Машина была в {dash(c.get('closing_time'))}")
+    lines.append("ПП закрыто")
     return "\n".join(lines)
 
 
@@ -384,6 +369,44 @@ def publish_report(point: str, draft: dict, link_token: str) -> str:
     return text
 
 
+MACHINE_TIMES_PATH = DATA_DIR / "machine_times.json"
+CLOCK_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+def remember_machine_time(point: str, when: str, source: str) -> None:
+    if not CLOCK_RE.fullmatch(when):
+        raise PublishError("Время нужно в виде ЧЧ:ММ, например 14:30.", 400)
+    today = datetime.now().date().isoformat()
+    with _lock:
+        stored = {}
+        if MACHINE_TIMES_PATH.exists():
+            try:
+                stored = json.loads(MACHINE_TIMES_PATH.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                stored = {}
+        stored[point] = {
+            "date": today,
+            "time": when,
+            "source": source,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        MACHINE_TIMES_PATH.write_text(json.dumps(stored, ensure_ascii=False), encoding="utf-8")
+
+
+def machine_time_today(point: str) -> str | None:
+    if not MACHINE_TIMES_PATH.exists():
+        return None
+    try:
+        stored = json.loads(MACHINE_TIMES_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    row = stored.get(point) or {}
+    if row.get("date") != datetime.now().date().isoformat():
+        return None
+    when = str(row.get("time") or "")
+    return when if CLOCK_RE.fullmatch(when) else None
+
+
 def publish_machine(point: str, when: str, link_token: str) -> str:
     sender = username_from_link(link_token)
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{4,31}", sender):
@@ -407,6 +430,7 @@ def publish_machine(point: str, when: str, link_token: str) -> str:
         },
     )
     try:
+        remember_machine_time(point, when, "panel")
         remember_report(point, text, {}, "machine")
     except sqlite3.Error as exc:
         print(f"report save failed: {exc}")
@@ -842,6 +866,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"ok": True, "count": count})
             return
 
+        machine_match = re.fullmatch(r"/api/machine-time/(\d{3,6})", path)
+        if machine_match:
+            point = machine_match.group(1)
+            when = machine_time_today(point)
+            self._json(200, {"ok": True, "point_number": point, "time": when})
+            return
+
         driver_match = re.fullmatch(r"/api/driver/(\d{3,6})", path)
         if driver_match:
             point = driver_match.group(1)
@@ -909,6 +940,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/link/request",
             "/api/link/confirm",
             "/api/machine",
+            "/api/machine-seen",
             "/api/returns",
             "/api/returns/photos/session",
         } and not re.fullmatch(
@@ -940,6 +972,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(exc.status, {"error": str(exc)})
                 return
             self._json(200, {"ok": True, **linked})
+            return
+        if path == "/api/machine-seen":
+            point = re.sub(r"\D", "", str(payload.get("point_number") or ""))
+            when = str(payload.get("time") or "").strip()
+            if not re.fullmatch(r"\d{3,6}", point):
+                self._json(400, {"error": "Нужен номер ПП."})
+                return
+            try:
+                remember_machine_time(point, when, "chat")
+            except PublishError as exc:
+                self._json(exc.status, {"error": str(exc)})
+                return
+            self._json(200, {"ok": True, "point_number": point, "time": when})
             return
         if path == "/api/machine":
             point = re.sub(r"\D", "", str(payload.get("point_number") or ""))
