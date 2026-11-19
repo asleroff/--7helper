@@ -24,15 +24,7 @@
         case 'SCRAPE_FOUND': {
           const isRemains = Boolean(message.remains);
           if (isRemains) {
-            const hrefDecoded = decodeURIComponent(location.href || '');
-            if (!hrefDecoded.includes('GRPC_REMNANT_FILTER_ARTICLE_POSTING')) {
-              return {
-                ok: false,
-                error:
-                  'Остатки: нет фильтра типа «Отправления» в URL (ожидался GRPC_REMNANT_FILTER_ARTICLE_POSTING)',
-                diagnostics: api.pageDiagnostics(),
-              };
-            }
+            return api.scrapeWarehouseLeftover();
           }
           const prep = await api.prepareReportPage({
             settleMs: message.settleMs || 800,
@@ -110,15 +102,8 @@
           return { ok: true, ...api.pageDiagnostics() };
         case 'SCRAPE_CARRIAGES': {
           await api.settle(message.settleMs || 500);
-          const todayFilter = await api.applyCarriageTodayFilter();
-          await api.settle(600);
           const carriages = api.scrapeFinishedCarriages();
           carriages.warnings = carriages.warnings || [];
-          if (!todayFilter.applied) {
-            carriages.warnings.push(
-              'Дата перевозок: кнопка «Применить» не нажата. Проверьте, что в таблице только сегодняшний день.'
-            );
-          }
           return carriages;
         }
         case 'SCRAPE_ZASYL':

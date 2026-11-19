@@ -258,19 +258,13 @@ function scrapeFinishedCarriages() {
   }
 
   const todayList = carriages.filter((c) => c.is_today);
-  const shipmentRows = todayList.length ? todayList : carriages;
-  const shipmentValues = shipmentRows
-    .map((row) => row.accepted)
-    .filter((value) => value != null);
+  // «Не принято» — сумма столбца «Недостачи» за показанные дни. 1–10 это недовоз, их не берём.
+  const shortageValues = carriages.map((row) => row.shortage).filter((value) => value != null);
   let notAccepted = null;
-  if (acceptedToday != null && shipmentValues.length) {
-    const shipmentsTotal = shipmentValues.reduce((sum, value) => sum + value, 0);
-    notAccepted = shipmentsTotal - acceptedToday;
-    if (notAccepted < 0) {
-      warnings.push(
-        `Не принято получилось ${notAccepted}: отправлений ${shipmentsTotal}, принято ${acceptedToday}`
-      );
-    }
+  if (shortageValues.length) {
+    notAccepted = shortageValues.filter((value) => value > 10).reduce((sum, value) => sum + value, 0);
+  } else if (carriages.length) {
+    warnings.push('Не принято: в таблице нет столбца «Недостачи»');
   }
   return {
     ok: true,

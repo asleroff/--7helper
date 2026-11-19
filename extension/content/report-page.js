@@ -126,7 +126,30 @@ async function prepareReportPage({
     if (tab.clicked) await sleep(1000);
   }
 
-  const before = scrapeFoundCount();
+  let before = scrapeFoundCount();
+  if (!before.ok) {
+    try {
+      before = await waitFor(() => {
+        const found = scrapeFoundCount();
+        return found.ok ? found : null;
+      }, { timeoutMs: 6000, intervalMs: 250 });
+    } catch (_) {
+      before = scrapeFoundCount();
+    }
+  }
+  if (before.ok && !(requireNonZero && before.value === 0)) {
+    return {
+      ok: true,
+      findClicked: false,
+      findLabel: null,
+      before: before.value,
+      value: before.value,
+      tableRows: document.querySelectorAll('table tbody tr').length,
+      error: null,
+      diagnostics: pageDiagnostics(),
+    };
+  }
+
   let click = clickFindButton();
   if (!click.clicked) {
     await sleep(600);
@@ -221,11 +244,58 @@ function buildGiveoutUrl() {
 }
 
 
+async function scrapeWarehouseLeftover() {
+  const hrefDecoded = decodeURIComponent(location.href || '');
+  if (!hrefDecoded.includes('GRPC_REMNANT_FILTER_ARTICLE_POSTING')) {
+    return {
+      ok: false,
+      error: 'Остатки: открыт не фильтр «Отправление»',
+      diagnostics: pageDiagnostics(),
+    };
+  }
+
+  // Сначала сайт показывает «Найдено: 0», настоящее число появляется через пару секунд.
+  const started = Date.now();
+  let zeroSince = 0;
+  let stableValue = null;
+  let stableSince = 0;
+  while (Date.now() - started < 20000) {
+    const found = scrapeFoundCount();
+    if (found.ok && found.value > 0) {
+      if (stableValue === found.value && Date.now() - stableSince >= 500) {
+        return { ok: true, value: found.value, findClicked: false, diagnostics: pageDiagnostics() };
+      }
+      if (stableValue !== found.value) {
+        stableValue = found.value;
+        stableSince = Date.now();
+      }
+      zeroSince = 0;
+    } else if (found.ok && found.value === 0) {
+      stableValue = null;
+      if (!zeroSince) zeroSince = Date.now();
+      if (Date.now() - zeroSince >= 8000) {
+        return { ok: true, value: 0, findClicked: false, diagnostics: pageDiagnostics() };
+      }
+    }
+    await sleep(300);
+  }
+
+  const last = scrapeFoundCount();
+  if (last.ok && last.value > 0) {
+    return { ok: true, value: last.value, findClicked: false, diagnostics: pageDiagnostics() };
+  }
+  return {
+    ok: false,
+    error: 'Остатки: «Найдено:» не успело обновиться после нуля',
+    diagnostics: pageDiagnostics(),
+  };
+}
+
+
 function buildRemainsUrl() {
-  // Отчёты → Остатки → Тип = «Отправления» → Найти. Как у тары: фильтр уже в адресе.
-  const filter = { filter: ['GRPC_REMNANT_FILTER_ARTICLE_POSTING'] };
-  const encoded = encodeURIComponent(JSON.stringify(filter));
-  return `https://turbo-pvz.ozon.ru/reports/remains?filter=${encoded}`;
+  // Кавычки в фильтре кодируются, скобки остаются как в рабочей ссылке Турбо.
+  const filter = JSON.stringify({ filter: ['GRPC_REMNANT_FILTER_ARTICLE_POSTING'] }).replace(/"/g, '%22');
+  return `https://turbo-pvz.ozon.ru/reports/remains?filter=${filter}`;
 }
 
 
@@ -319,5 +389,5 @@ async function settle(ms = 400) {
   await waitUntil(reportPageReady, Math.min(ms, 1200));
 }
 
-  Object.assign(api, { getPointNumber, clickFindButton, prepareReportPage, buildGiveoutUrl, buildRemainsUrl, buildTareUrl, buildOzonShelfUrl, scrapeOzonShelf, buildCarriagesUrl, buildCarriageDetailUrl, reportPageReady, settle });
+  Object.assign(api, { getPointNumber, clickFindButton, prepareReportPage, scrapeWarehouseLeftover, buildGiveoutUrl, buildRemainsUrl, buildTareUrl, buildOzonShelfUrl, scrapeOzonShelf, buildCarriagesUrl, buildCarriageDetailUrl, reportPageReady, settle });
 })();

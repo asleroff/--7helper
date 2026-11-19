@@ -137,7 +137,8 @@ function sameDocument(tabUrl, wanted) {
   try {
     const current = new URL(tabUrl);
     const target = new URL(wanted);
-    return current.origin === target.origin && current.pathname === target.pathname && current.search === target.search;
+    // Сайт переписывает query (кодировку фильтра), точное совпадение строки ломает переход.
+    return current.origin === target.origin && current.pathname === target.pathname;
   } catch {
     return false;
   }
@@ -299,35 +300,20 @@ async function collectClosing({ selectedCarriageLongId, machineTime } = {}) {
     );
   }
 
-  // 2) Leftover — Остатки → тип «Отправления» в URL → Найти → «Найдено»
+  // 2) Остатки. Не уходим, пока на странице не появится «Найдено:» или не истечёт ожидание.
   try {
-    await navigateAndReady(tabId, urls.remains, 300);
-    let leftover = await send(tabId, {
-      type: 'SCRAPE_FOUND',
-      settleMs: 200,
-      remains: true,
-      openReportsMenu: false,
-      ensureTab: null,
-    });
-    if (leftover?.ok && leftover.value === 0) {
-      await navigateAndReady(tabId, urls.remains, 300);
-      leftover = await send(tabId, {
-        type: 'SCRAPE_FOUND',
-        settleMs: 200,
-        remains: true,
-        openReportsMenu: false,
-        ensureTab: null,
-      });
-    }
+    await navigateAndReady(tabId, urls.remains, 300, 20000);
+    const leftover = await send(
+      tabId,
+      { type: 'SCRAPE_FOUND', settleMs: 200, remains: true },
+      30000
+    );
     pages.push('remains');
     if (leftover?.ok) {
       closing.leftover = leftover.value;
-      checklist.leftover = Boolean(leftover.findClicked);
-      if (leftover.warnings?.length) warnings.push(...leftover.warnings);
-      if (!leftover.findClicked) {
-        warnings.push('Остатки: «Найти» не нажата — значение могло быть пустым/старым');
-      } else if (leftover.value === 0) {
-        warnings.push('Остатки: после «Найти» найдено 0');
+      checklist.leftover = true;
+      if (leftover.value === 0) {
+        warnings.push('Остатки: на странице 0');
       }
     } else {
       const d = leftover?.diagnostics;
@@ -375,7 +361,7 @@ async function collectClosing({ selectedCarriageLongId, machineTime } = {}) {
       closing.not_accepted = carriagesPayload.not_accepted_today;
       checklist.not_accepted = true;
     } else {
-      warnings.push('Не принято: нет «Сегодня принято» или колонки «Отправлений»');
+      warnings.push('Не принято: не удалось сложить столбец «Недостачи»');
     }
     if (carriagesPayload?.warnings?.length) warnings.push(...carriagesPayload.warnings);
   } catch (e) {
